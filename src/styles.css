@@ -19,6 +19,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100svh;
+  overflow-x: hidden;
 }
 
 button,
@@ -39,8 +40,10 @@ button {
 }
 
 .play-shell {
+  width: 100%;
   display: grid;
   place-items: center;
+  overflow: hidden;
 }
 
 .creator-layout,
@@ -488,6 +491,8 @@ input[type="range"] {
 .play-layout {
   display: grid;
   gap: 28px;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .play-main {
@@ -526,7 +531,6 @@ input[type="range"] {
   max-height: 132px;
   object-fit: contain;
   filter: drop-shadow(0 14px 20px rgba(0, 0, 0, 0.35));
-  transform: translateY(-8px);
 }
 
 .logo-editor-preview {
@@ -612,6 +616,18 @@ input[type="range"] {
   }
 }
 
+@keyframes winner-pop-portrait {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.94);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .confetti-layer {
   position: fixed;
   inset: 0;
@@ -668,8 +684,25 @@ input[type="range"] {
     flex-direction: column;
   }
 
-  .creator-grid {
+  .creator-grid,
+  .play-main {
     grid-template-columns: 1fr;
+  }
+
+  .play-main {
+    grid-template-areas:
+      "logo"
+      "wheel"
+      "side";
+    row-gap: 16px;
+  }
+
+  .play-logo {
+    justify-self: end;
+    width: min(48vw, 280px);
+    min-height: 74px;
+    margin-bottom: -18px;
+    transform: translateY(-12px);
   }
 
   .play-logo img {
@@ -690,47 +723,49 @@ input[type="range"] {
 }
 
 @media (orientation: portrait) {
-  .play-header .editor-return-button {
-    order: -1;
-    align-self: flex-end;
-    transform: translateY(-42px);
-  }
-
   .play-main {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
     grid-template-areas:
       "logo"
+      "winner"
       "wheel"
       "side";
-    justify-items: center;
-    row-gap: 18px;
+    row-gap: 16px;
   }
 
   .play-logo {
-    justify-self: center;
-    align-self: center;
-    width: min(58vw, 300px);
-    min-height: 0;
+    justify-self: end;
+    width: min(48vw, 300px);
+    min-height: 74px;
+    margin-bottom: -20px;
+    transform: translateY(-14px);
   }
 
   .play-logo img {
     max-height: 112px;
-    transform: translateY(-14px);
   }
 
-  .play-wheel {
-    width: 100%;
+  .winner-announcement {
+    position: static;
+    grid-area: winner;
+    justify-self: center;
+    width: min(94vw, 430px);
+    padding: 0 12px;
+    transform: none;
+    animation: winner-pop-portrait 520ms cubic-bezier(0.16, 1, 0.3, 1)
+      both;
+  }
+
+  .winner-announcement strong {
+    font-size: clamp(2.2rem, 12vw, 4.2rem);
+  }
+
+  .winner-announcement span:not(.winner-color) {
+    font-size: clamp(1.4rem, 7vw, 2.6rem);
   }
 
   .play-side {
-    width: min(100%, 360px);
-    justify-items: stretch;
-  }
-
-  .play-side .spin-button,
-  .result-box {
-    width: 100%;
+    padding-top: clamp(28px, 5svh, 48px);
   }
 }
 
@@ -844,6 +879,12 @@ input[type="range"] {
 
   .result-box {
     width: 100%;
+  }
+
+  .play-layout .play-side .spin-button {
+    width: auto;
+    flex: 0 0 auto;
+    justify-self: center;
   }
 
   .prize-item {

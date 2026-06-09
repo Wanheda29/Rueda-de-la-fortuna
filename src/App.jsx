@@ -117,29 +117,14 @@ function App() {
   const [estaGirando, setEstaGirando] = useState(false);
   const [ultimoResultado, setUltimoResultado] = useState(null);
   const [animarRuleta, setAnimarRuleta] = useState(true);
-  const [pausarGiroLento, setPausarGiroLento] = useState(false);
   const [confetiId, setConfetiId] = useState(0);
   const [mostrarAnuncioGanador, setMostrarAnuncioGanador] = useState(false);
   const ruletaVisualRef = useRef(null);
   const rotacionActualRef = useRef(0);
-  const finalizarGiroTimeoutRef = useRef(null);
-  const reanudarGiroLentoTimeoutRef = useRef(null);
 
   const anguloPorGajo = 360 / ruleta.gajos.length;
   const fondoRuleta = crearFondoRuleta(ruleta.gajos);
   const fondoModoJuego = crearEstiloFondoJuego(ruleta.fondoJuego);
-
-  useEffect(() => {
-    return () => {
-      if (finalizarGiroTimeoutRef.current) {
-        window.clearTimeout(finalizarGiroTimeoutRef.current);
-      }
-
-      if (reanudarGiroLentoTimeoutRef.current) {
-        window.clearTimeout(reanudarGiroLentoTimeoutRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (vista !== "juego") return;
@@ -164,7 +149,8 @@ function App() {
 
   useEffect(() => {
     const debeGirarLento =
-      vista === "editor" || (vista === "juego" && !estaGirando && !pausarGiroLento);
+      vista === "editor" ||
+      (vista === "juego" && !estaGirando && !ultimoResultado);
     if (!debeGirarLento) return undefined;
 
     let frameId;
@@ -192,7 +178,7 @@ function App() {
     frameId = window.requestAnimationFrame(animar);
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [vista, estaGirando, pausarGiroLento]);
+  }, [vista, estaGirando, ultimoResultado]);
 
   function actualizarGajo(index, propiedad, valor) {
     setRuleta((ruletaActual) => ({
@@ -374,17 +360,6 @@ function App() {
   }
 
   function resetearTirada() {
-    if (finalizarGiroTimeoutRef.current) {
-      window.clearTimeout(finalizarGiroTimeoutRef.current);
-      finalizarGiroTimeoutRef.current = null;
-    }
-
-    if (reanudarGiroLentoTimeoutRef.current) {
-      window.clearTimeout(reanudarGiroLentoTimeoutRef.current);
-      reanudarGiroLentoTimeoutRef.current = null;
-    }
-
-    setPausarGiroLento(false);
     setAnimarRuleta(false);
     rotacionActualRef.current = 0;
     setRotacion(0);
@@ -396,19 +371,16 @@ function App() {
   function girarRuleta() {
     if (estaGirando) return;
 
-    if (reanudarGiroLentoTimeoutRef.current) {
-      window.clearTimeout(reanudarGiroLentoTimeoutRef.current);
-      reanudarGiroLentoTimeoutRef.current = null;
-    }
-
-    setPausarGiroLento(false);
     setEstaGirando(true);
     setAnimarRuleta(true);
     setMostrarAnuncioGanador(false);
 
     const vueltasMinimas = 360 * 5;
     const nuevoIndiceGanador = elegirIndicePorProbabilidad(ruleta.gajos);
-    const offsetAleatorio = Math.random() * anguloPorGajo - anguloPorGajo / 2;
+    const margenBorde = anguloPorGajo * 0.01;
+    const rangoSeguro = anguloPorGajo - margenBorde * 2;
+    const offsetAleatorio =
+      Math.random() * rangoSeguro - rangoSeguro / 2;
     const posicionDentroDelGajo =
       nuevoIndiceGanador * anguloPorGajo + offsetAleatorio;
     const anguloObjetivo = normalizarAngulo(360 - posicionDentroDelGajo);
@@ -429,18 +401,11 @@ function App() {
       return nuevaRotacion;
     });
 
-    finalizarGiroTimeoutRef.current = window.setTimeout(() => {
+    window.setTimeout(() => {
       setUltimoResultado(resultado);
-      setPausarGiroLento(true);
       setEstaGirando(false);
       setConfetiId((idActual) => idActual + 1);
       setMostrarAnuncioGanador(true);
-      finalizarGiroTimeoutRef.current = null;
-
-      reanudarGiroLentoTimeoutRef.current = window.setTimeout(() => {
-        setPausarGiroLento(false);
-        reanudarGiroLentoTimeoutRef.current = null;
-      }, 1500);
     }, 6240);
   }
 
@@ -859,19 +824,9 @@ function VistaJuego({
   return (
     <section className="play-layout" onClick={ocultarAnuncioGanador}>
       {confetiId > 0 ? <Confeti key={confetiId} /> : null}
-      {mostrarAnuncioGanador && !estaGirando && ultimoResultado ? (
-        <ResultadoGanador resultado={ultimoResultado} />
-      ) : null}
 
       <header className="play-header">
-        <div>
-          {ruleta.mostrarTitulo ? <h1>{ruleta.nombre}</h1> : null}
-        </div>
-        <button
-          className="secondary-button editor-return-button"
-          type="button"
-          onClick={volverAlEditor}
-        >
+        <button className="secondary-button" type="button" onClick={volverAlEditor}>
           Volver al editor
         </button>
       </header>
@@ -885,6 +840,10 @@ function VistaJuego({
               style={{ opacity: ruleta.logoJuego.opacidad / 100 }}
             />
           </div>
+        ) : null}
+
+        {mostrarAnuncioGanador && !estaGirando && ultimoResultado ? (
+          <ResultadoGanador resultado={ultimoResultado} />
         ) : null}
 
         <div className="wheel-stage play-wheel" aria-label="Ruleta de premios">
@@ -912,9 +871,7 @@ function VistaJuego({
                   style={{ background: ultimoResultado.color }}
                   aria-hidden="true"
                 />
-                {ultimoResultado.texto ? (
-                  <strong>{ultimoResultado.texto}</strong>
-                ) : null}
+                <strong>{ultimoResultado.texto || "Sin texto"}</strong>
               </div>
             ) : (
               <strong>Aun no hay resultado</strong>
@@ -942,7 +899,7 @@ function ResultadoGanador({ resultado }) {
 
   return (
     <div className="winner-announcement" role="status" aria-live="polite">
-      <strong>Ganaste!</strong>
+      <strong>¡Ganaste!</strong>
       {tieneTexto ? (
         <span>{textoResultado}</span>
       ) : (
