@@ -30,17 +30,17 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - - name: Build
-  run: npm run build
-  env:
-    VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-    VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: "${{ vars.VITE_SUPABASE_URL }}"
+          VITE_SUPABASE_ANON_KEY: "${{ vars.VITE_SUPABASE_ANON_KEY }}"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
-
+          
   deploy:
     environment:
       name: github-pages
