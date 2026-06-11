@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
+import { supabase, supabaseConfigured } from "./supabaseClient";
 
 const STORAGE_KEY = "ruletas-editables";
+const ONLINE_QUERY_PARAM = "ruleta";
+const ONLINE_STORAGE_BUCKET = "wheel-images";
 const MIN_GAJOS = 4;
 const MAX_GAJOS = 14;
 const coloresConfeti = [
@@ -119,12 +122,26 @@ function App() {
   const [animarRuleta, setAnimarRuleta] = useState(true);
   const [confetiId, setConfetiId] = useState(0);
   const [mostrarAnuncioGanador, setMostrarAnuncioGanador] = useState(false);
+  const [estadoOnline, setEstadoOnline] = useState({
+    estado: "idle",
+    mensaje: "",
+  });
+  const [enlaceCompartido, setEnlaceCompartido] = useState("");
   const ruletaVisualRef = useRef(null);
   const rotacionActualRef = useRef(0);
 
   const anguloPorGajo = 360 / ruleta.gajos.length;
   const fondoRuleta = crearFondoRuleta(ruleta.gajos);
   const fondoModoJuego = crearEstiloFondoJuego(ruleta.fondoJuego);
+
+  useEffect(() => {
+    const parametros = new URLSearchParams(window.location.search);
+    const idRuletaOnline = parametros.get(ONLINE_QUERY_PARAM);
+
+    if (!idRuletaOnline) return;
+
+    cargarRuletaOnline(idRuletaOnline);
+  }, []);
 
   useEffect(() => {
     if (vista !== "juego") return;
@@ -316,6 +333,10 @@ function App() {
       guardadaEn: new Date().toISOString(),
     };
 
+    guardarRuletaLocal(ruletaParaGuardar);
+  }
+
+  function guardarRuletaLocal(ruletaParaGuardar) {
     const siguientesRuletas = [
       ruletaParaGuardar,
       ...ruletasGuardadas.filter((item) => item.id !== ruletaParaGuardar.id),
@@ -326,6 +347,137 @@ function App() {
     guardarEnStorage(siguientesRuletas);
   }
 
+  async function guardarRuletaOnline() {
+    if (!supabaseConfigured) {
+      setEstadoOnline({
+        estado: "error",
+        mensaje: "Configura Supabase para guardar ruletas online.",
+      });
+      return;
+    }
+
+    const ruletaNormalizada = normalizarRuleta(ruleta);
+    const idLocal = ruletaNormalizada.id || crearId();
+    const onlineId =
+      ruletaNormalizada.onlineId || ruletaNormalizada.id || crearId();
+    const nombre = ruletaNormalizada.nombre.trim() || "Ruleta sin nombre";
+
+    setEstadoOnline({
+      estado: "loading",
+      mensaje: "Guardando ruleta online...",
+    });
+
+    try {
+      const configOnline = await prepararRuletaOnline(
+        {
+          ...ruletaNormalizada,
+          id: idLocal,
+          onlineId,
+          nombre,
+        },
+        onlineId
+      );
+
+      const { error } = await supabase.from("wheels").upsert({
+        id: onlineId,
+        name: nombre,
+        config_json: configOnline,
+        updated_at: new Date().toISOString(),
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      const enlace = crearEnlaceCompartido(onlineId);
+      const ruletaGuardada = {
+        ...configOnline,
+        id: idLocal,
+        onlineId,
+        nombre,
+        guardadaEn: new Date().toISOString(),
+      };
+
+      setRuleta(ruletaGuardada);
+      setEnlaceCompartido(enlace);
+      guardarRuletaLocal(ruletaGuardada);
+      window.history.replaceState(null, "", enlace);
+      setEstadoOnline({
+        estado: "success",
+        mensaje: "Ruleta guardada online. El enlace ya esta listo.",
+      });
+    } catch (error) {
+      setEstadoOnline({
+        estado: "error",
+        mensaje: `No se pudo guardar online: ${error.message}`,
+      });
+    }
+  }
+
+  async function cargarRuletaOnline(id) {
+    if (!supabaseConfigured) {
+      setEstadoOnline({
+        estado: "error",
+        mensaje: "Falta configurar Supabase para abrir este enlace.",
+      });
+      return;
+    }
+
+    setEstadoOnline({
+      estado: "loading",
+      mensaje: "Cargando ruleta compartida...",
+    });
+
+    try {
+      const { data, error } = await supabase
+        .from("wheels")
+        .select("config_json")
+        .eq("id", id)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      const ruletaOnline = normalizarRuleta({
+        ...data.config_json,
+        id: data.config_json?.id || id,
+        onlineId: id,
+      });
+
+      setRuleta(ruletaOnline);
+      guardarRuletaLocal(ruletaOnline);
+      setUltimoResultado(null);
+      resetearTirada();
+      setEnlaceCompartido(crearEnlaceCompartido(id));
+      setVista("editor");
+      setEstadoOnline({
+        estado: "success",
+        mensaje: "Ruleta compartida cargada correctamente.",
+      });
+    } catch (error) {
+      setEstadoOnline({
+        estado: "error",
+        mensaje: `No se pudo cargar la ruleta: ${error.message}`,
+      });
+    }
+  }
+
+  async function copiarEnlaceCompartido() {
+    if (!enlaceCompartido) return;
+
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(enlaceCompartido);
+    } else {
+      window.prompt("Copia este enlace:", enlaceCompartido);
+    }
+
+    setEstadoOnline({
+      estado: "success",
+      mensaje: "Enlace copiado.",
+    });
+  }
+
   function crearNuevaRuleta() {
     const siguienteNumero = ruletasGuardadas.length + 1;
     setRuleta(
@@ -334,12 +486,22 @@ function App() {
         nombre: `Ruleta ${siguienteNumero}`,
       })
     );
+    setEnlaceCompartido("");
+    setEstadoOnline({ estado: "idle", mensaje: "" });
     setUltimoResultado(null);
     resetearTirada();
   }
 
   function cargarRuletaGuardada(ruletaGuardada) {
-    setRuleta(normalizarRuleta(ruletaGuardada));
+    const ruletaCargada = normalizarRuleta(ruletaGuardada);
+
+    setRuleta(ruletaCargada);
+    setEnlaceCompartido(
+      ruletaCargada.onlineId
+        ? crearEnlaceCompartido(ruletaCargada.onlineId)
+        : ""
+    );
+    setEstadoOnline({ estado: "idle", mensaje: "" });
     resetearTirada();
   }
 
@@ -438,10 +600,15 @@ function App() {
           cargarImagenFondoJuego={cargarImagenFondoJuego}
           cargarImagenLogoJuego={cargarImagenLogoJuego}
           guardarRuleta={guardarRuleta}
+          guardarRuletaOnline={guardarRuletaOnline}
+          copiarEnlaceCompartido={copiarEnlaceCompartido}
           cargarRuletaGuardada={cargarRuletaGuardada}
           eliminarRuletaGuardada={eliminarRuletaGuardada}
           abrirJuego={abrirJuego}
           crearNuevaRuleta={crearNuevaRuleta}
+          estadoOnline={estadoOnline}
+          enlaceCompartido={enlaceCompartido}
+          supabaseConfigurado={supabaseConfigured}
         />
       ) : (
         <VistaJuego
@@ -483,10 +650,15 @@ function EditorRuleta({
   cargarImagenFondoJuego,
   cargarImagenLogoJuego,
   guardarRuleta,
+  guardarRuletaOnline,
+  copiarEnlaceCompartido,
   cargarRuletaGuardada,
   eliminarRuletaGuardada,
   abrirJuego,
   crearNuevaRuleta,
+  estadoOnline,
+  enlaceCompartido,
+  supabaseConfigurado,
 }) {
   const totalProbabilidad = ruleta.gajos.reduce(
     (total, gajo) => total + (Number(gajo.probabilidad) || 0),
@@ -512,6 +684,14 @@ function EditorRuleta({
           <button className="secondary-button" type="button" onClick={guardarRuleta}>
             Guardar ruleta
           </button>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={guardarRuletaOnline}
+            disabled={estadoOnline.estado === "loading" || !supabaseConfigurado}
+          >
+            {estadoOnline.estado === "loading" ? "Guardando..." : "Guardar online"}
+          </button>
           <button className="spin-button" type="button" onClick={abrirJuego}>
             <span aria-hidden="true">▶</span>
             Jugar
@@ -521,6 +701,41 @@ function EditorRuleta({
 
       <div className="creator-grid">
         <section className="editor-panel" aria-label="Configuracion de ruleta">
+          <div className="online-panel">
+            <div>
+              <h2>Link compartible</h2>
+              <p>
+                Guarda online para abrir esta misma ruleta desde otro
+                dispositivo.
+              </p>
+            </div>
+
+            {!supabaseConfigurado ? (
+              <p className="online-message error">
+                Falta configurar Supabase en las variables de entorno.
+              </p>
+            ) : null}
+
+            {enlaceCompartido ? (
+              <div className="share-link-row">
+                <input type="text" value={enlaceCompartido} readOnly />
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={copiarEnlaceCompartido}
+                >
+                  Copiar
+                </button>
+              </div>
+            ) : null}
+
+            {estadoOnline.mensaje ? (
+              <p className={`online-message ${estadoOnline.estado}`}>
+                {estadoOnline.mensaje}
+              </p>
+            ) : null}
+          </div>
+
           <label className="wide-field">
             Nombre de la ruleta
             <input
@@ -1215,6 +1430,80 @@ function crearEstiloFondoJuego(fondoJuego) {
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
   };
+}
+
+async function prepararRuletaOnline(ruleta, idRuleta) {
+  const centroImagen = await subirImagenSiEsNecesario(
+    ruleta.centro.imagen,
+    `${idRuleta}/centro`
+  );
+  const fondoImagen = await subirImagenSiEsNecesario(
+    ruleta.fondoJuego.imagen,
+    `${idRuleta}/fondo`
+  );
+  const logoImagen = await subirImagenSiEsNecesario(
+    ruleta.logoJuego.imagen,
+    `${idRuleta}/logo`
+  );
+
+  return {
+    ...ruleta,
+    centro: {
+      ...ruleta.centro,
+      imagen: centroImagen,
+    },
+    fondoJuego: {
+      ...ruleta.fondoJuego,
+      imagen: fondoImagen,
+    },
+    logoJuego: {
+      ...ruleta.logoJuego,
+      imagen: logoImagen,
+    },
+  };
+}
+
+async function subirImagenSiEsNecesario(valorImagen, rutaBase) {
+  if (!valorImagen || !valorImagen.startsWith("data:")) {
+    return valorImagen || "";
+  }
+
+  const respuesta = await fetch(valorImagen);
+  const archivo = await respuesta.blob();
+  const extension = obtenerExtensionImagen(archivo.type);
+  const ruta = `${rutaBase}.${extension}`;
+
+  const { error } = await supabase.storage
+    .from(ONLINE_STORAGE_BUCKET)
+    .upload(ruta, archivo, {
+      cacheControl: "3600",
+      contentType: archivo.type,
+      upsert: true,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  const { data } = supabase.storage
+    .from(ONLINE_STORAGE_BUCKET)
+    .getPublicUrl(ruta);
+
+  return data.publicUrl;
+}
+
+function obtenerExtensionImagen(tipo) {
+  if (tipo === "image/jpeg") return "jpg";
+  if (tipo === "image/png") return "png";
+  if (tipo === "image/webp") return "webp";
+  if (tipo === "image/gif") return "gif";
+  return "png";
+}
+
+function crearEnlaceCompartido(id) {
+  const url = new URL(window.location.href);
+  url.searchParams.set(ONLINE_QUERY_PARAM, id);
+  return url.toString();
 }
 
 function esColorHex(valor) {
