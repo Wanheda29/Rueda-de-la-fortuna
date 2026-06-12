@@ -37,6 +37,7 @@ const coloresSugeridos = [
 const ruletaInicial = {
   nombre: "Ruleta principal",
   mostrarTitulo: true,
+  mostrarUltimoResultado: true,
   centro: {
     texto: "Gira",
     imagen: "",
@@ -285,6 +286,13 @@ function App() {
     }));
   }
 
+  function actualizarMostrarUltimoResultado(mostrarUltimoResultado) {
+    setRuleta((ruletaActual) => ({
+      ...ruletaActual,
+      mostrarUltimoResultado,
+    }));
+  }
+
   function cargarImagenCentro(event) {
     const archivo = event.target.files?.[0];
     if (!archivo) return;
@@ -357,9 +365,7 @@ function App() {
     }
 
     const ruletaNormalizada = normalizarRuleta(ruleta);
-    const idLocal = ruletaNormalizada.id || crearId();
-    const onlineId =
-      ruletaNormalizada.onlineId || ruletaNormalizada.id || crearId();
+    const id = ruletaNormalizada.id || crearId();
     const nombre = ruletaNormalizada.nombre.trim() || "Ruleta sin nombre";
 
     setEstadoOnline({
@@ -371,15 +377,14 @@ function App() {
       const configOnline = await prepararRuletaOnline(
         {
           ...ruletaNormalizada,
-          id: idLocal,
-          onlineId,
+          id,
           nombre,
         },
-        onlineId
+        id
       );
 
       const { error } = await supabase.from("wheels").upsert({
-        id: onlineId,
+        id,
         name: nombre,
         config_json: configOnline,
         updated_at: new Date().toISOString(),
@@ -389,11 +394,10 @@ function App() {
         throw error;
       }
 
-      const enlace = crearEnlaceCompartido(onlineId);
+      const enlace = crearEnlaceCompartido(id);
       const ruletaGuardada = {
-        ...configOnline,
-        id: idLocal,
-        onlineId,
+        ...ruletaNormalizada,
+        id,
         nombre,
         guardadaEn: new Date().toISOString(),
       };
@@ -441,8 +445,7 @@ function App() {
 
       const ruletaOnline = normalizarRuleta({
         ...data.config_json,
-        id: data.config_json?.id || id,
-        onlineId: id,
+        id,
       });
 
       setRuleta(ruletaOnline);
@@ -486,22 +489,12 @@ function App() {
         nombre: `Ruleta ${siguienteNumero}`,
       })
     );
-    setEnlaceCompartido("");
-    setEstadoOnline({ estado: "idle", mensaje: "" });
     setUltimoResultado(null);
     resetearTirada();
   }
 
   function cargarRuletaGuardada(ruletaGuardada) {
-    const ruletaCargada = normalizarRuleta(ruletaGuardada);
-
-    setRuleta(ruletaCargada);
-    setEnlaceCompartido(
-      ruletaCargada.onlineId
-        ? crearEnlaceCompartido(ruletaCargada.onlineId)
-        : ""
-    );
-    setEstadoOnline({ estado: "idle", mensaje: "" });
+    setRuleta(normalizarRuleta(ruletaGuardada));
     resetearTirada();
   }
 
@@ -590,6 +583,7 @@ function App() {
           ruletaVisualRef={ruletaVisualRef}
           actualizarNombre={actualizarNombre}
           actualizarMostrarTitulo={actualizarMostrarTitulo}
+          actualizarMostrarUltimoResultado={actualizarMostrarUltimoResultado}
           actualizarGajo={actualizarGajo}
           agregarGajo={agregarGajo}
           eliminarGajo={eliminarGajo}
@@ -640,6 +634,7 @@ function EditorRuleta({
   ruletaVisualRef,
   actualizarNombre,
   actualizarMostrarTitulo,
+  actualizarMostrarUltimoResultado,
   actualizarGajo,
   agregarGajo,
   eliminarGajo,
@@ -752,6 +747,17 @@ function EditorRuleta({
               onChange={(event) => actualizarMostrarTitulo(event.target.checked)}
             />
             Mostrar en pantalla
+          </label>
+
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={ruleta.mostrarUltimoResultado}
+              onChange={(event) =>
+                actualizarMostrarUltimoResultado(event.target.checked)
+              }
+            />
+            Mostrar ultimo resultado
           </label>
 
           <div className="center-editor">
@@ -1075,23 +1081,25 @@ function VistaJuego({
         </div>
 
         <aside className="play-side">
-          <div className="result-box" aria-live="polite">
-            <span>Ultimo resultado</span>
-            {estaGirando ? (
-              <strong>Girando...</strong>
-            ) : ultimoResultado ? (
-              <div className="result-value">
-                <span
-                  className="result-color"
-                  style={{ background: ultimoResultado.color }}
-                  aria-hidden="true"
-                />
-                <strong>{ultimoResultado.texto || "Sin texto"}</strong>
-              </div>
-            ) : (
-              <strong>Aun no hay resultado</strong>
-            )}
-          </div>
+          {ruleta.mostrarUltimoResultado ? (
+            <div className="result-box" aria-live="polite">
+              <span>Ultimo resultado</span>
+              {estaGirando ? (
+                <strong>Girando...</strong>
+              ) : ultimoResultado ? (
+                <div className="result-value">
+                  <span
+                    className="result-color"
+                    style={{ background: ultimoResultado.color }}
+                    aria-hidden="true"
+                  />
+                  <strong>{ultimoResultado.texto || "Sin texto"}</strong>
+                </div>
+              ) : (
+                <strong>Aun no hay resultado</strong>
+              )}
+            </div>
+          ) : null}
 
           <button
             className="spin-button"
@@ -1389,6 +1397,10 @@ function normalizarRuleta(ruleta) {
       typeof ruleta.mostrarTitulo === "boolean"
         ? ruleta.mostrarTitulo
         : ruletaInicial.mostrarTitulo,
+    mostrarUltimoResultado:
+      typeof ruleta.mostrarUltimoResultado === "boolean"
+        ? ruleta.mostrarUltimoResultado
+        : ruletaInicial.mostrarUltimoResultado,
     centro: {
       texto: String(ruleta.centro?.texto ?? ruletaInicial.centro.texto),
       imagen: String(ruleta.centro?.imagen || ""),
@@ -1471,7 +1483,8 @@ async function subirImagenSiEsNecesario(valorImagen, rutaBase) {
   const respuesta = await fetch(valorImagen);
   const archivo = await respuesta.blob();
   const extension = obtenerExtensionImagen(archivo.type);
-  const ruta = `${rutaBase}.${extension}`;
+  const version = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const ruta = `${rutaBase}-${version}.${extension}`;
 
   const { error } = await supabase.storage
     .from(ONLINE_STORAGE_BUCKET)
@@ -1489,7 +1502,7 @@ async function subirImagenSiEsNecesario(valorImagen, rutaBase) {
     .from(ONLINE_STORAGE_BUCKET)
     .getPublicUrl(ruta);
 
-  return data.publicUrl;
+  return `${data.publicUrl}?v=${version}`;
 }
 
 function obtenerExtensionImagen(tipo) {
