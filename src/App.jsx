@@ -6,6 +6,10 @@ const ONLINE_QUERY_PARAM = "ruleta";
 const ONLINE_STORAGE_BUCKET = "wheel-images";
 const MIN_GAJOS = 4;
 const MAX_GAJOS = 14;
+const TICK_SOUND_URL = `${import.meta.env.BASE_URL}sounds/tick.m4a`;
+const WINNER_SOUND_URL = `${import.meta.env.BASE_URL}sounds/winner.m4a`;
+const MIN_TICK_INTERVAL_MS = 45;
+const MIN_TICK_SPEED_DEGREES_PER_MS = 0.05;
 const coloresConfeti = [
   "#ffcf33",
   "#f97316",
@@ -130,10 +134,26 @@ function App() {
   const [enlaceCompartido, setEnlaceCompartido] = useState("");
   const ruletaVisualRef = useRef(null);
   const rotacionActualRef = useRef(0);
+  const tickFrameRef = useRef(null);
+  const ultimoGajoTickRef = useRef(null);
+  const ultimoTickTiempoRef = useRef(0);
+  const ultimoAnguloTickRef = useRef(0);
+  const ultimoFrameTickTiempoRef = useRef(0);
+  const audioContextRef = useRef(null);
+  const tickBufferRef = useRef(null);
+  const tickBufferPromiseRef = useRef(null);
 
   const anguloPorGajo = 360 / ruleta.gajos.length;
   const fondoRuleta = crearFondoRuleta(ruleta.gajos);
   const fondoModoJuego = crearEstiloFondoJuego(ruleta.fondoJuego);
+
+  useEffect(
+    () => () => {
+      detenerSonidoGajos();
+      audioContextRef.current?.close();
+    },
+    []
+  );
 
   useEffect(() => {
     const parametros = new URLSearchParams(window.location.search);
@@ -515,6 +535,7 @@ function App() {
   }
 
   function resetearTirada() {
+    detenerSonidoGajos();
     setAnimarRuleta(false);
     rotacionActualRef.current = 0;
     setRotacion(0);
@@ -526,6 +547,7 @@ function App() {
   function girarRuleta() {
     if (estaGirando) return;
 
+    prepararSonidoTick();
     setEstaGirando(true);
     setAnimarRuleta(true);
     setMostrarAnuncioGanador(false);
@@ -556,7 +578,11 @@ function App() {
       return nuevaRotacion;
     });
 
+    iniciarSonidoGajos(anguloPorGajo);
+
     window.setTimeout(() => {
+      detenerSonidoGajos();
+      reproducirSonidoGanador();
       setUltimoResultado(resultado);
       setEstaGirando(false);
       setConfetiId((idActual) => idActual + 1);
@@ -566,6 +592,107 @@ function App() {
 
   function ocultarAnuncioGanador() {
     setMostrarAnuncioGanador(false);
+  }
+
+  function iniciarSonidoGajos(anguloActualPorGajo) {
+    detenerSonidoGajos();
+    prepararSonidoTick();
+
+    ultimoGajoTickRef.current = null;
+    ultimoTickTiempoRef.current = 0;
+    ultimoAnguloTickRef.current = 0;
+    ultimoFrameTickTiempoRef.current = 0;
+
+    function revisarGajo(tiempoActual) {
+      const anguloVisual = obtenerRotacionVisual(ruletaVisualRef.current);
+      const indiceGajo = Math.floor(
+        normalizarAngulo(anguloVisual) / anguloActualPorGajo
+      );
+      const tiempoAnterior = ultimoFrameTickTiempoRef.current;
+      const anguloAnterior = ultimoAnguloTickRef.current;
+      const diferenciaTiempo = tiempoAnterior ? tiempoActual - tiempoAnterior : 0;
+      const diferenciaAngulo = tiempoAnterior
+        ? normalizarAngulo(anguloVisual - anguloAnterior)
+        : 0;
+      const velocidadAngular =
+        diferenciaTiempo > 0 ? diferenciaAngulo / diferenciaTiempo : 0;
+
+      if (ultimoGajoTickRef.current === null) {
+        ultimoGajoTickRef.current = indiceGajo;
+      } else if (
+        indiceGajo !== ultimoGajoTickRef.current &&
+        velocidadAngular >= MIN_TICK_SPEED_DEGREES_PER_MS &&
+        tiempoActual - ultimoTickTiempoRef.current >= MIN_TICK_INTERVAL_MS
+      ) {
+        reproducirTick();
+        ultimoGajoTickRef.current = indiceGajo;
+        ultimoTickTiempoRef.current = tiempoActual;
+      }
+
+      ultimoAnguloTickRef.current = anguloVisual;
+      ultimoFrameTickTiempoRef.current = tiempoActual;
+      tickFrameRef.current = window.requestAnimationFrame(revisarGajo);
+    }
+
+    tickFrameRef.current = window.requestAnimationFrame(revisarGajo);
+  }
+
+  function detenerSonidoGajos() {
+    if (!tickFrameRef.current) return;
+
+    window.cancelAnimationFrame(tickFrameRef.current);
+    tickFrameRef.current = null;
+  }
+
+  function reproducirTick() {
+    const audioContext = audioContextRef.current;
+    const tickBuffer = tickBufferRef.current;
+
+    if (!audioContext || !tickBuffer) return;
+
+    const fuente = audioContext.createBufferSource();
+    const volumen = audioContext.createGain();
+
+    fuente.buffer = tickBuffer;
+    volumen.gain.value = 0.65;
+    fuente.connect(volumen);
+    volumen.connect(audioContext.destination);
+    fuente.start();
+  }
+
+  function reproducirSonidoGanador() {
+    const audio = new Audio(WINNER_SOUND_URL);
+    audio.volume = 0.85;
+    audio.play().catch(() => {});
+  }
+
+  function prepararSonidoTick() {
+    const audioContext = obtenerAudioContext();
+
+    if (audioContext.state === "suspended") {
+      audioContext.resume().catch(() => {});
+    }
+
+    if (tickBufferRef.current || tickBufferPromiseRef.current) return;
+
+    tickBufferPromiseRef.current = fetch(TICK_SOUND_URL)
+      .then((respuesta) => respuesta.arrayBuffer())
+      .then((arrayBuffer) => audioContext.decodeAudioData(arrayBuffer))
+      .then((audioBuffer) => {
+        tickBufferRef.current = audioBuffer;
+      })
+      .catch(() => {
+        tickBufferPromiseRef.current = null;
+      });
+  }
+
+  function obtenerAudioContext() {
+    if (!audioContextRef.current) {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      audioContextRef.current = new AudioContext();
+    }
+
+    return audioContextRef.current;
   }
 
   return (
@@ -1137,14 +1264,14 @@ function ResultadoGanador({ resultado }) {
 }
 
 function Confeti() {
-  const piezas = Array.from({ length: 80 }, (_, index) => ({
+  const piezas = Array.from({ length: 220 }, (_, index) => ({
     id: index,
     x: Math.random() * 100,
-    drift: Math.random() * 80 - 40,
-    delay: Math.random() * 0.45,
-    duration: 2.4 + Math.random() * 1.2,
+    drift: Math.random() * 190 - 95,
+    delay: Math.random() * 0.75,
+    duration: 3 + Math.random() * 1.8,
     rotate: Math.random() * 360,
-    size: 7 + Math.random() * 7,
+    size: 6 + Math.random() * 10,
     color: coloresConfeti[index % coloresConfeti.length],
   }));
 
@@ -1242,6 +1369,23 @@ function crearFondoRuleta(gajos) {
 
 function normalizarAngulo(angulo) {
   return ((angulo % 360) + 360) % 360;
+}
+
+function obtenerRotacionVisual(elemento) {
+  if (!elemento) return 0;
+
+  const transform = window.getComputedStyle(elemento).transform;
+  if (!transform || transform === "none") return 0;
+
+  const valores = transform.match(/matrix\(([^)]+)\)/)?.[1].split(",");
+  if (!valores || valores.length < 2) return 0;
+
+  const a = Number(valores[0]);
+  const b = Number(valores[1]);
+
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+
+  return normalizarAngulo((Math.atan2(b, a) * 180) / Math.PI);
 }
 
 function crearGajoNuevo(index) {
