@@ -1306,32 +1306,47 @@ function RuletaVisual({
   onCenterClick,
 }) {
   return (
-    <div
-      ref={ruletaVisualRef}
-      className={`wheel ${animarRuleta ? "" : "no-transition"}`}
-      style={{
-        background: fondoRuleta,
-        transform: `rotate(${rotacion}deg)`,
-      }}
-    >
-      {ruleta.gajos.map((gajo, index) => (
-        <div
-          className="wheel-segment"
-          key={`gajo-${index}`}
-          style={{
-            transform: `rotate(${index * anguloPorGajo}deg)`,
-          }}
-        >
-          <span
+    <div className="wheel-wrap">
+      <div
+        ref={ruletaVisualRef}
+        className={`wheel ${animarRuleta ? "" : "no-transition"}`}
+        style={{
+          "--slice-angle": `${anguloPorGajo}deg`,
+          background: fondoRuleta,
+          transform: `rotate(${rotacion}deg)`,
+        }}
+      >
+        {ruleta.gajos.map((gajo, index) => (
+          <div
+            className="wheel-segment"
+            key={`gajo-${index}`}
             style={{
-              color: gajo.colorTexto,
-              fontSize: `${gajo.tamanoTexto}px`,
+              transform: `rotate(${index * anguloPorGajo}deg)`,
             }}
           >
-            {gajo.texto}
-          </span>
-        </div>
-      ))}
+            <span
+              style={{
+                color: gajo.colorTexto,
+                fontSize: `${gajo.tamanoTexto}px`,
+              }}
+            >
+              {gajo.texto}
+            </span>
+          </div>
+        ))}
+        {ruleta.gajos.map((_, index) => (
+          <span
+            className="wheel-divider"
+            key={`divider-${index}`}
+            style={{
+              transform: `translateX(-50%) rotate(${
+                index * anguloPorGajo - anguloPorGajo / 2
+              }deg)`,
+            }}
+          />
+        ))}
+      </div>
+
       <button
         className={`wheel-center ${ruleta.centro.imagen ? "has-image" : ""}`}
         type="button"
