@@ -1408,3 +1408,11 @@ summary:focus-visible {
     flex: 0 0 auto;
   }
 }
+
+/* Uploaded logos can reach the full diameter of the central button. */
+.wheel-center.has-image {
+  border: 0;
+  box-shadow:
+    0 3px 6px rgba(0, 0, 0, 0.22),
+    0 10px 18px rgba(0, 0, 0, 0.22);
+}
