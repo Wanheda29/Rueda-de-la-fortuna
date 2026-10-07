@@ -45,7 +45,7 @@ const ruletaInicial = {
   centro: {
     texto: "Gira",
     imagen: "",
-    tamanoImagen: 72,
+    tamanoImagen: 116,
   },
   fondoJuego: {
     color: "#101010",
@@ -321,6 +321,7 @@ function App() {
 
     lector.onload = () => {
       actualizarCentro("imagen", String(lector.result));
+      actualizarCentro("tamanoImagen", 116);
     };
 
     lector.readAsDataURL(archivo);
@@ -961,7 +962,7 @@ function EditorRuleta({
             </div>
 
             <label>
-              Tamano imagen central: {ruleta.centro.tamanoImagen}px
+              Tamaño de la imagen central: {Math.round(ruleta.centro.tamanoImagen / 116 * 100)}%
               <input
                 type="range"
                 min="36"
@@ -972,6 +973,14 @@ function EditorRuleta({
                 }
               />
             </label>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={!ruleta.centro.imagen}
+              onClick={() => actualizarCentro("tamanoImagen", 116)}
+            >
+              Ocupar todo el centro
+            </button>
           </div>
 
           <div className="background-editor">
@@ -1424,8 +1433,8 @@ function RuletaVisual({
             src={ruleta.centro.imagen}
             alt=""
             style={{
-              width: `${ruleta.centro.tamanoImagen}px`,
-              height: `${ruleta.centro.tamanoImagen}px`,
+              width: `${ruleta.centro.tamanoImagen / 116 * 100}%`,
+              height: `${ruleta.centro.tamanoImagen / 116 * 100}%`,
             }}
           />
         ) : null}
