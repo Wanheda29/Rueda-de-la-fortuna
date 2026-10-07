@@ -782,6 +782,7 @@ function EditorRuleta({
   enlaceCompartido,
   supabaseConfigurado,
 }) {
+  const [pestana, setPestana] = useState("gajos");
   const totalProbabilidad = ruleta.gajos.reduce(
     (total, gajo) => total + (Number(gajo.probabilidad) || 0),
     0
@@ -791,11 +792,10 @@ function EditorRuleta({
     <section className="creator-layout">
       <div className="creator-header">
         <div>
-          <p className="eyebrow">Menu de creacion</p>
-          <h1>Ruleta editable</h1>
+          <p className="eyebrow">Tu espacio de creación</p>
+          <h1>Diseña tu ruleta</h1>
           <p>
-            Ajusta textos, colores, centro e imagen. Guarda tus versiones y
-            entra a jugar cuando la ruleta este lista.
+            Personaliza los premios, dale tu estilo y empieza a jugar.
           </p>
         </div>
 
@@ -821,43 +821,83 @@ function EditorRuleta({
         </div>
       </div>
 
+
       <div className="creator-grid">
-        <section className="editor-panel" aria-label="Configuracion de ruleta">
-          <div className="online-panel">
-            <div>
-              <h2>Link compartible</h2>
-              <p>
-                Guarda online para abrir esta misma ruleta desde otro
-                dispositivo.
-              </p>
-            </div>
-
-            {!supabaseConfigurado ? (
-              <p className="online-message error">
-                Falta configurar Supabase en las variables de entorno.
-              </p>
-            ) : null}
-
-            {enlaceCompartido ? (
-              <div className="share-link-row">
-                <input type="text" value={enlaceCompartido} readOnly />
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={copiarEnlaceCompartido}
-                >
-                  Copiar
-                </button>
-              </div>
-            ) : null}
-
-            {estadoOnline.mensaje ? (
-              <p className={`online-message ${estadoOnline.estado}`}>
-                {estadoOnline.mensaje}
-              </p>
-            ) : null}
+        <section className="editor-panel" aria-label="Configuración de ruleta">
+          <div className="editor-tabs" role="tablist" aria-label="Secciones de configuración">
+            {[
+              ["gajos", "Gajos"],
+              ["apariencia", "Apariencia"],
+              ["guardadas", "Guardadas"],
+            ].map(([id, etiqueta], index) => (
+              <button
+                key={id}
+                id={`tab-${id}`}
+                type="button"
+                role="tab"
+                aria-selected={pestana === id}
+                aria-controls={`panel-${id}`}
+                tabIndex={pestana === id ? 0 : -1}
+                onClick={() => setPestana(id)}
+                onKeyDown={(event) => {
+                  const ids = ["gajos", "apariencia", "guardadas"];
+                  let siguiente;
+                  if (event.key === "ArrowRight") siguiente = (index + 1) % ids.length;
+                  if (event.key === "ArrowLeft") siguiente = (index + ids.length - 1) % ids.length;
+                  if (event.key === "Home") siguiente = 0;
+                  if (event.key === "End") siguiente = ids.length - 1;
+                  if (siguiente === undefined) return;
+                  event.preventDefault();
+                  setPestana(ids[siguiente]);
+                  document.getElementById(`tab-${ids[siguiente]}`)?.focus();
+                }}
+              >
+                {etiqueta}
+                {id === "gajos" ? <span className="tab-count">{ruleta.gajos.length}</span> : null}
+              </button>
+            ))}
           </div>
 
+          <div className="editor-section" id="panel-gajos" role="tabpanel" aria-labelledby="tab-gajos" hidden={pestana !== "gajos"}>
+          <div className="prize-board" aria-label="Editor de gajos">
+            <div className="section-heading">
+              <div>
+                <h2>Gajos</h2>
+                <p>
+                  {ruleta.gajos.length} de {MAX_GAJOS} gajos · Total: {totalProbabilidad.toFixed(1)}%
+                </p>
+              </div>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={agregarGajo}
+                disabled={ruleta.gajos.length >= MAX_GAJOS}
+              >
+                Agregar gajo
+              </button>
+            </div>
+            <p className="probability-hint">Al cambiar una probabilidad, las demás se ajustan para mantener el total en 100%. El tamaño visual de los gajos es igual.</p>
+            <div className="prize-list">
+              {ruleta.gajos.map((gajo, index) => (
+                <EditorGajo
+                  gajo={gajo}
+                  index={index}
+                  key={`editor-${index}`}
+                  actualizarGajo={actualizarGajo}
+                  eliminarGajo={eliminarGajo}
+                  puedeEliminar={ruleta.gajos.length > MIN_GAJOS}
+                />
+              ))}
+            </div>
+          </div>
+
+          </div>
+
+          <div className="editor-section" id="panel-apariencia" role="tabpanel" aria-labelledby="tab-apariencia" hidden={pestana !== "apariencia"}>
+            <div className="section-intro">
+              <h2>Hazla tuya</h2>
+              <p>Ajusta el centro y el escenario de tu juego.</p>
+            </div>
           <label className="wide-field">
             Nombre de la ruleta
             <input
@@ -873,7 +913,7 @@ function EditorRuleta({
               checked={ruleta.mostrarTitulo}
               onChange={(event) => actualizarMostrarTitulo(event.target.checked)}
             />
-            Mostrar en pantalla
+            Mostrar el título en el juego
           </label>
 
           <label className="check-field">
@@ -884,7 +924,7 @@ function EditorRuleta({
                 actualizarMostrarUltimoResultado(event.target.checked)
               }
             />
-            Mostrar ultimo resultado
+            Mostrar el último resultado
           </label>
 
           <div className="center-editor">
@@ -1008,49 +1048,10 @@ function EditorRuleta({
             ) : null}
           </div>
 
-          <div className="prize-board" aria-label="Editor de gajos">
-            <div className="section-heading">
-              <div>
-                <h2>Gajos</h2>
-                <p>
-                  {ruleta.gajos.length} gajos activos. Minimo {MIN_GAJOS},
-                  maximo {MAX_GAJOS}. Total: {totalProbabilidad.toFixed(1)}%.
-                </p>
-              </div>
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={agregarGajo}
-                disabled={ruleta.gajos.length >= MAX_GAJOS}
-              >
-                Agregar gajo
-              </button>
-            </div>
-            <div className="prize-list">
-              {ruleta.gajos.map((gajo, index) => (
-                <EditorGajo
-                  gajo={gajo}
-                  index={index}
-                  key={`editor-${index}`}
-                  actualizarGajo={actualizarGajo}
-                  eliminarGajo={eliminarGajo}
-                  puedeEliminar={ruleta.gajos.length > MIN_GAJOS}
-                />
-              ))}
-            </div>
+
           </div>
-        </section>
 
-        <aside className="preview-panel" aria-label="Vista previa">
-          <RuletaVisual
-            ruleta={ruleta}
-            fondoRuleta={fondoRuleta}
-          anguloPorGajo={anguloPorGajo}
-          rotacion={rotacion}
-          ruletaVisualRef={ruletaVisualRef}
-          animarRuleta={false}
-        />
-
+          <div className="editor-section" id="panel-guardadas" role="tabpanel" aria-labelledby="tab-guardadas" hidden={pestana !== "guardadas"}>
           <section className="saved-panel" aria-label="Ruletas guardadas">
             <h2>Ruletas guardadas</h2>
             {ruletasGuardadas.length > 0 ? (
@@ -1078,9 +1079,68 @@ function EditorRuleta({
                 ))}
               </div>
             ) : (
-              <p>Aun no guardaste ruletas.</p>
+              <div className="saved-empty"><strong>Tu próxima ruleta empieza aquí</strong><p>Usa Guardar ruleta para conservar esta versión en este dispositivo.</p></div>
             )}
           </section>
+
+          <div className="online-panel">
+            <div>
+              <h2>Link compartible</h2>
+              <p>
+                Guarda online para abrir esta misma ruleta desde otro
+                dispositivo.
+              </p>
+            </div>
+
+            {!supabaseConfigurado ? (
+              <p className="online-message error">
+                Falta configurar Supabase en las variables de entorno.
+              </p>
+            ) : null}
+
+            {enlaceCompartido ? (
+              <div className="share-link-row">
+                <input type="text" value={enlaceCompartido} readOnly />
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={copiarEnlaceCompartido}
+                >
+                  Copiar
+                </button>
+              </div>
+            ) : null}
+
+            {estadoOnline.mensaje ? (
+              <p className={`online-message ${estadoOnline.estado}`}>
+                {estadoOnline.mensaje}
+              </p>
+            ) : null}
+          </div>
+
+
+          </div>
+        </section>
+
+        <aside className="preview-panel" aria-label="Vista previa">
+          <div className="preview-heading">
+            <div>
+              <p className="eyebrow">Vista previa</p>
+              <h2>{ruleta.nombre || "Ruleta sin nombre"}</h2>
+            </div>
+            <span className="preview-badge"><span aria-hidden="true" />En vivo</span>
+          </div>
+          <div className="preview-stage" style={crearEstiloFondoJuego(ruleta.fondoJuego)}>
+            <RuletaVisual
+              ruleta={ruleta}
+              fondoRuleta={fondoRuleta}
+              anguloPorGajo={anguloPorGajo}
+              rotacion={rotacion}
+              ruletaVisualRef={ruletaVisualRef}
+              animarRuleta={false}
+            />
+          </div>
+          <p className="preview-note">Los cambios se reflejan al instante. Pulsa Jugar para probar la ruleta.</p>
         </aside>
       </div>
     </section>
@@ -1089,68 +1149,73 @@ function EditorRuleta({
 
 function EditorGajo({ gajo, index, actualizarGajo, eliminarGajo, puedeEliminar }) {
   return (
-    <div className="prize-item">
-      <span>{index + 1}</span>
-      <label>
-        Texto
-        <input
-          type="text"
-          value={gajo.texto}
-          onChange={(event) => actualizarGajo(index, "texto", event.target.value)}
-        />
-      </label>
-      <label>
-        Gajo
-        <input
-          type="color"
-          value={gajo.color}
-          onChange={(event) => actualizarGajo(index, "color", event.target.value)}
-        />
-      </label>
-      <label>
-        Texto
-        <input
-          type="color"
-          value={gajo.colorTexto}
-          onChange={(event) =>
-            actualizarGajo(index, "colorTexto", event.target.value)
-          }
-        />
-      </label>
-      <label>
-        Tamano
-        <input
-          type="number"
-          min="10"
-          max="22"
-          value={gajo.tamanoTexto}
-          onChange={(event) =>
-            actualizarGajo(index, "tamanoTexto", Number(event.target.value))
-          }
-        />
-      </label>
-      <label>
-        Prob. %
-        <input
-          type="number"
-          min="0"
-          max="100"
-          step="0.1"
-          value={gajo.probabilidad}
-          onChange={(event) =>
-            actualizarGajo(index, "probabilidad", Number(event.target.value))
-          }
-        />
-      </label>
-      <button
-        className="ghost-button remove-slice-button"
-        type="button"
-        onClick={() => eliminarGajo(index)}
-        disabled={!puedeEliminar}
-      >
-        Eliminar
-      </button>
-    </div>
+    <article className="prize-item" style={{ "--slice-color": gajo.color }} aria-label={`Gajo ${index + 1}`}>
+      <div className="slice-main">
+        <span className="slice-number">{index + 1}</span>
+        <label className="slice-text">
+          Premio o texto
+          <input
+            type="text"
+            value={gajo.texto}
+            placeholder="Escribe un premio"
+            onChange={(event) => actualizarGajo(index, "texto", event.target.value)}
+          />
+        </label>
+        <label className="slice-color">
+          Color
+          <input
+            type="color"
+            value={gajo.color}
+            onChange={(event) => actualizarGajo(index, "color", event.target.value)}
+          />
+        </label>
+      </div>
+      <details className="slice-details">
+        <summary>
+          <span>Más opciones</span>
+          <span className="slice-probability">{Number(gajo.probabilidad).toFixed(1)}%</span>
+        </summary>
+        <div className="slice-options">
+          <label>
+            Color del texto
+            <input
+              type="color"
+              value={gajo.colorTexto}
+              onChange={(event) => actualizarGajo(index, "colorTexto", event.target.value)}
+            />
+          </label>
+          <label>
+            Tamaño del texto
+            <input
+              type="number"
+              min="10"
+              max="22"
+              value={gajo.tamanoTexto}
+              onChange={(event) => actualizarGajo(index, "tamanoTexto", Number(event.target.value))}
+            />
+          </label>
+          <label>
+            Probabilidad (%)
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={gajo.probabilidad}
+              onChange={(event) => actualizarGajo(index, "probabilidad", Number(event.target.value))}
+            />
+          </label>
+        </div>
+        <button
+          className="ghost-button remove-slice-button"
+          type="button"
+          onClick={() => eliminarGajo(index)}
+          disabled={!puedeEliminar}
+        >
+          Eliminar gajo
+        </button>
+      </details>
+    </article>
   );
 }
 
@@ -1195,7 +1260,6 @@ function VistaJuego({
         ) : null}
 
         <div className="wheel-stage play-wheel" aria-label="Ruleta de premios">
-          <div className="pointer" aria-hidden="true" />
           <RuletaVisual
             ruleta={ruleta}
             fondoRuleta={fondoRuleta}
@@ -1307,6 +1371,7 @@ function RuletaVisual({
 }) {
   return (
     <div className="wheel-wrap">
+      <div className="pointer" aria-hidden="true" />
       <div
         ref={ruletaVisualRef}
         className={`wheel ${animarRuleta ? "" : "no-transition"}`}
