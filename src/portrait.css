@@ -1,0 +1,137 @@
+/* Portrait is a layout, regardless of whether the display is wider than 980px. */
+@media (orientation: portrait) {
+  .play-shell .game-scene > .play-main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    grid-template-areas: "logo" "wheel" "side";
+    justify-items: center;
+    gap: 18px;
+  }
+
+  .play-shell .game-scene > .play-main.without-logo {
+    grid-template-rows: auto auto;
+    grid-template-areas: "wheel" "side";
+  }
+
+  .play-shell .play-wheel { width: 100%; }
+  .play-shell .play-side { width: 100%; justify-items: center; padding-top: 0; }
+  .play-shell .play-logo { justify-self: center; margin: 0; transform: none; }
+}
+
+/* Match the reference composition using viewport proportions, not fixed pixels.
+   The wheel sits at 47.5% height and Girar begins around 72% on a 9:16 display.
+   Additional panels remain in normal flow; the background stays viewport-sized. */
+@media (orientation: portrait) and (min-height: 760px) {
+  .play-shell {
+    --portrait-wheel: min(72vw, 40.5svh);
+    --portrait-wheel-top: calc(47.5svh - var(--portrait-wheel) / 2);
+    display: block;
+    padding: 0;
+    background-attachment: fixed;
+  }
+
+  .play-shell > .play-layout {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+    max-width: none;
+    min-height: 100svh;
+    overflow: visible;
+  }
+
+  .play-shell .play-layout > .controls-shell {
+    position: absolute;
+    top: 19.5svh;
+    left: max(3vw, env(safe-area-inset-left));
+    right: max(3vw, env(safe-area-inset-right));
+    z-index: 5;
+  }
+
+  .play-shell .presentation-controls { flex-direction: row; align-items: start; gap: 8px; }
+  .play-shell .presentation-controls > .secondary-button { width: auto; flex-shrink: 0; }
+  .play-shell .presentation-controls > div { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .play-shell .presentation-controls > div button { flex: 0 1 auto; width: auto; }
+
+  .play-shell .play-layout > .game-scene {
+    position: relative;
+    width: 100%;
+    padding-top: var(--portrait-wheel-top);
+  }
+
+  .play-shell .game-scene > .scene-title {
+    position: absolute;
+    top: 12svh;
+    left: 5%;
+    width: 90%;
+    margin: 0;
+    max-height: 6svh;
+    overflow: auto;
+    font-size: clamp(1.2rem, 3vw, 2.6rem);
+  }
+
+  .play-shell .game-scene > .play-main,
+  .play-shell .game-scene > .play-main.without-logo { gap: 0; }
+
+  .play-shell .play-wheel {
+    height: var(--portrait-wheel);
+    min-height: 0;
+    padding: 0;
+  }
+
+  .play-shell .play-wheel .wheel-wrap { --wheel-size: var(--portrait-wheel); }
+  .play-shell .wheel-center { width: clamp(72px, calc(var(--wheel-size) * .22), 360px); }
+
+  .play-shell .play-logo {
+    position: absolute;
+    top: 3svh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(40vw, 400px);
+    height: 7svh;
+    min-height: 0;
+  }
+
+  .play-shell .play-logo img { max-height: 7svh; }
+
+  .play-shell .play-side {
+    gap: 14px;
+    margin-top: 4svh;
+    padding: 0 16px;
+  }
+
+  .play-shell .play-side > .spin-button {
+    order: -1;
+    width: auto;
+    min-width: clamp(64px, 10.5vw, 160px);
+    min-height: clamp(44px, 4svh, 96px);
+    padding: 0 20px;
+    font-size: clamp(.95rem, 1.8vw, 1.5rem);
+  }
+
+  .play-shell .play-side > .result-box,
+  .play-shell .play-side > .winner-card { width: min(100%, 540px); }
+
+  .play-shell .play-layout > .result-history,
+  .play-shell .play-layout > .session-actions {
+    align-self: center;
+    width: min(calc(100% - 32px), 640px);
+    margin-top: 24px;
+  }
+
+  .play-shell .session-actions { text-align: center; }
+  .play-shell .play-layout > .game-shortcut { align-self: center; margin: 16px 16px 24px; }
+  .play-shell .play-layout > .game-message { position: absolute; top: 23svh; left: 5%; right: 5%; z-index: 4; }
+}
+
+@media (orientation: portrait) and (min-height: 760px) and (max-width: 540px) {
+  .play-shell .presentation-controls { flex-wrap: wrap; }
+  .play-shell .presentation-controls > div { width: 100%; justify-content: space-between; }
+  .play-shell .presentation-controls button,
+  .play-shell .presentation-controls .sound-levels summary {
+    min-height: 32px;
+    padding: 6px 8px;
+    font-size: .7rem;
+  }
+}
