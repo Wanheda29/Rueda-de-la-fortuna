@@ -1447,7 +1447,7 @@ function VistaJuego({
       {mensajeJuego && <p className="game-message" role="status">{mensajeJuego}</p>}
       <GameScene {...{ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando, ultimoResultado, animarRuleta, girarRuleta, disponibles}}
         resultCard={mostrarAnuncioGanador && !estaGirando && ultimoResultado ? <WinnerCard result={ultimoResultado} onClose={ocultarAnuncioGanador} onSpin={girarRuleta} canSpin={disponibles > 0} persistent={ruleta.juego.mantenerResultado} /> : null} />
-      <ResultHistory results={historial} removedCount={ruleta.juego.retirarGanador ? retirados.length : 0} onReset={reiniciarSesion} />
+      {ruleta.juego.mostrarHistorial ? <ResultHistory results={historial} removedCount={ruleta.juego.retirarGanador ? retirados.length : 0} onReset={reiniciarSesion} /> : (historial.length > 0 || retirados.length > 0) && <div className="session-actions"><button className="ghost-button" type="button" onClick={reiniciarSesion}>Reiniciar sesión</button></div>}
       <p className="game-shortcut">Pulsa Espacio para girar · Esc para salir de pantalla completa</p>
     </section>
   );

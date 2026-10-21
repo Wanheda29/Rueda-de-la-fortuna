@@ -4,13 +4,13 @@ export const PALETTES = {
   Pastel: ["#fecdd3", "#ddd6fe", "#bfdbfe", "#a7f3d0", "#fde68a", "#fed7aa"],
 };
 
-export const DEFAULT_GAME = { duracion: 6.2, sonido: true, confeti: true, animaciones: true, retirarGanador: false, volumenGiro: 65, volumenResultado: 85, mantenerResultado: true, ocultarControles: true, modoSectores: "iguales", orientacionTexto: "radial" };
+export const DEFAULT_GAME = { duracion: 6.2, sonido: true, confeti: true, animaciones: true, retirarGanador: false, volumenGiro: 65, volumenResultado: 85, mantenerResultado: true, ocultarControles: true, mostrarHistorial: true, modoSectores: "iguales", orientacionTexto: "radial" };
 
 export function normalizeGame(value = {}) {
   const duration = Number(value.duracion);
   return {
     duracion: Number.isFinite(duration) ? Math.min(12, Math.max(2, duration)) : DEFAULT_GAME.duracion,
-    ...Object.fromEntries(["sonido", "confeti", "animaciones", "retirarGanador", "mantenerResultado", "ocultarControles"].map(key => [key, typeof value[key] === "boolean" ? value[key] : DEFAULT_GAME[key]])),
+    ...Object.fromEntries(["sonido", "confeti", "animaciones", "retirarGanador", "mantenerResultado", "ocultarControles", "mostrarHistorial"].map(key => [key, typeof value[key] === "boolean" ? value[key] : DEFAULT_GAME[key]])),
     ...Object.fromEntries(["volumenGiro", "volumenResultado"].map(key => [key, Number.isFinite(Number(value[key])) ? Math.min(100, Math.max(0, Number(value[key]))) : DEFAULT_GAME[key]])),
     modoSectores: value.modoSectores === "proporcionales" ? "proporcionales" : "iguales",
     orientacionTexto: value.orientacionTexto === "horizontal" ? "horizontal" : "radial",
