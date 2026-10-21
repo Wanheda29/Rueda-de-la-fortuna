@@ -19,7 +19,7 @@ test("proportional wheel, pointer, highlight and effective probabilities agree",
   await expect(page.locator(".wheel-face > g")).toHaveCount(3);
   await page.getByRole("button", { name: "Jugar", exact: true }).click();
   await page.getByRole("button", { name: "Girar", exact: true }).click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.locator(".winner-card");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("heading")).toHaveText("Vuelve a intentarlo");
   await expect(dialog.locator("#winner-prize")).toHaveText("Pierde turno");
@@ -38,7 +38,7 @@ test("proportional wheel, pointer, highlight and effective probabilities agree",
   await expect(rows.nth(2).locator("td").last()).toHaveText("12.5%");
 });
 
-test("persistent result closes explicitly, supports repeat and restores keyboard access", async ({ page }) => {
+test("inline result stays visible, supports repeat and restores keyboard access", async ({ page }) => {
   await page.clock.install();
   await seed(page, { juego: { sonido: false, animaciones: false, confeti: false, mantenerResultado: true } });
   await page.goto(".");
@@ -46,14 +46,38 @@ test("persistent result closes explicitly, supports repeat and restores keyboard
   await page.getByRole("button", { name: "Girar", exact: true }).click();
   await page.clock.runFor(200);
   await page.clock.runFor(10000);
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.locator(".winner-card")).toBeVisible();
+  await expect(page.locator("dialog")).toHaveCount(0);
+  await expect(page.locator(".play-side > .winner-card")).toHaveCount(1);
+  const wheelBox = await page.locator(".wheel-wrap").boundingBox();
+  const cardBox = await page.locator(".winner-card").boundingBox();
+  expect(cardBox.x).toBeGreaterThanOrEqual(wheelBox.x + wheelBox.width);
+  expect(cardBox.width).toBeLessThanOrEqual(360);
   await page.screenshot({ path: "test-results/winner-card.png", fullPage: true });
   await page.getByRole("button", { name: "Volver a girar", exact: true }).click();
   await page.clock.runFor(200);
   await expect(page.locator(".result-history summary")).toContainText("2");
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".winner-card")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Girar", exact: true })).toBeEnabled();
+});
+
+test("mobile result sits below the wheel without an overlay or focus trap", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seed(page);
+  await page.goto(".");
+  await page.getByRole("button", { name: "Jugar", exact: true }).click();
+  await page.getByRole("button", { name: "Girar", exact: true }).click();
+  await expect(page.locator(".winner-card")).toBeVisible();
+  const wheelBox = await page.locator(".wheel-wrap").boundingBox();
+  const cardBox = await page.locator(".winner-card").boundingBox();
+  expect(cardBox.y).toBeGreaterThanOrEqual(wheelBox.y + wheelBox.height);
+  expect(cardBox.x).toBeGreaterThanOrEqual(0);
+  expect(cardBox.x + cardBox.width).toBeLessThanOrEqual(390);
+  await expect(page.locator("dialog")).toHaveCount(0);
+  await page.screenshot({ path: "test-results/winner-card-mobile.png", fullPage: true });
+  await page.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Girar", exact: true })).toBeFocused();
 });
 
 test("optional automatic dismissal and idle controls behave without blocking keyboard users", async ({ page }) => {
@@ -72,9 +96,9 @@ test("optional automatic dismissal and idle controls behave without blocking key
   await expect(page.getByRole("slider", { name: /Volumen del resultado/ })).toHaveValue("85");
   await page.getByRole("button", { name: "Girar", exact: true }).click();
   await page.clock.runFor(200);
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.locator(".winner-card")).toBeVisible();
   await page.clock.runFor(7000);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".winner-card")).toHaveCount(0);
 });
 
 test("saved library imports an exported copy, duplicates it, filters and rejects bad JSON", async ({ page }) => {

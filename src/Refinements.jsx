@@ -31,24 +31,32 @@ export function SavedLibrary({ wheels, onLoad, onDuplicate, onDelete, onImport }
 
 export function WinnerCard({ result, onClose, onSpin, canSpin, persistent }) {
   const ref = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  function close() {
+    const restoreFocus = ref.current?.contains(document.activeElement);
+    closeRef.current();
+    if (restoreFocus) requestAnimationFrame(() => document.querySelector(".play-side > .spin-button")?.focus({ preventScroll: true }));
+  }
   useEffect(() => {
-    const dialog = ref.current;
-    const previousFocus = document.activeElement;
-    dialog.showModal();
-    return () => { dialog.close(); if (previousFocus?.isConnected) previousFocus.focus(); };
-  }, [result.id]);
+    const escape = event => { if (event.key === "Escape") close(); };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, []);
   useEffect(() => {
     if (persistent) return;
-    const timer = setTimeout(onClose, 6000);
+    const timer = setTimeout(close, 6000);
     return () => clearTimeout(timer);
-  }, [persistent, result.id, onClose]);
-  return <dialog ref={ref} className="winner-card" aria-labelledby="winner-title" aria-describedby="winner-prize" onCancel={event => { event.preventDefault(); onClose(); }} style={{ "--result-color": result.color }}>
+  }, [persistent, result.id]);
+  return <section ref={ref} className="winner-card" aria-labelledby="winner-title" style={{ "--result-color": result.color }}>
+    <div role="status" aria-live="polite" aria-atomic="true">
     <span className="winner-kicker">Resultado de la tirada</span>
     <h2 id="winner-title">{result.mensajeResultado || "Resultado"}</h2>
     <p id="winner-prize">{result.texto || "Gajo sin texto"}</p>
-    <div className="winner-card-actions"><button className="spin-button" type="button" disabled={!canSpin} onClick={() => { onClose(); onSpin(); }}>Volver a girar</button><button className="secondary-button" type="button" onClick={onClose} autoFocus>Cerrar</button></div>
+    </div>
+    <div className="winner-card-actions"><button className="spin-button" type="button" disabled={!canSpin} onClick={() => { closeRef.current(); onSpin(); }}>Volver a girar</button><button className="secondary-button" type="button" onClick={close}>Cerrar</button></div>
     {!canSpin && <p className="winner-help">Se agotaron los premios. Cierra y reinicia la sesión para volver a jugar.</p>}
-  </dialog>;
+  </section>;
 }
 
 export function PresentationControls({ children, autoHide, spinning, resultOpen }) {
