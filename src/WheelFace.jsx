@@ -69,7 +69,7 @@ export function WheelFace({ wheel, winnerIndex }) {
       const layout = labelLayout(text, width, height, Math.min(slice.tamanoTexto || 15, size * .05), contextRef.current, horizontal ? 3 : 2);
       const highlight = Number.isInteger(winnerIndex);
       return <g key={slice.index} data-slice-index={slice.index} className={highlight && winnerIndex === slice.index ? "winning-slice" : undefined}>
-        <title>{`${text} · ${Number(slice.probabilidad).toFixed(1)}%`}</title>
+        <title>{text}</title>
         <path className="slice-hit-area" d={sectorPath(slice.start, slice.span)} fill={highlight ? (winnerIndex === slice.index ? "#ffffff18" : "#00000066") : "transparent"} />
         {highlight && winnerIndex === slice.index && <path className="winner-outline" d={sectorPath(slice.start, slice.span, 488)} fill="none" stroke="#fff1a4" strokeWidth="12" />}
         <line x1="500" y1="500" x2={point.x} y2={point.y} stroke="#ffffffaa" strokeWidth="3" />

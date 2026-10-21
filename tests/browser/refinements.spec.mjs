@@ -27,12 +27,15 @@ test("proportional wheel, pointer, highlight and effective probabilities agree",
   expect(sliceAtPointer(wheelSlices([70, 20, 10, 0].map(probabilidad => ({ probabilidad })), "proporcionales"), rotation)).toBe(1);
   await expect(page.locator(".winning-slice")).toHaveAttribute("data-slice-index", "1");
   await page.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await expect(page.locator(".play-layout .probability-info")).toHaveCount(0);
+  await expect(page.locator(".wheel-face > g > title")).toHaveText(["Gran premio", "Pierde turno", "Otra oportunidad"]);
+  await page.screenshot({ path: "test-results/proportional-game.png", fullPage: true });
+  await page.getByRole("button", { name: "Volver al editor", exact: true }).click();
   await page.getByText("Probabilidades actuales", { exact: true }).click();
   const rows = page.locator(".probability-info tbody tr");
   await expect(rows.nth(0).locator("td").last()).toHaveText("87.5%");
   await expect(rows.nth(1).locator("td").last()).toHaveText("0.0%");
   await expect(rows.nth(2).locator("td").last()).toHaveText("12.5%");
-  await page.screenshot({ path: "test-results/proportional-game.png", fullPage: true });
 });
 
 test("persistent result closes explicitly, supports repeat and restores keyboard access", async ({ page }) => {
