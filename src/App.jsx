@@ -1447,7 +1447,6 @@ function VistaJuego({
       {mensajeJuego && <p className="game-message" role="status">{mensajeJuego}</p>}
       <GameScene {...{ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando, ultimoResultado, animarRuleta, girarRuleta, disponibles}} />
       {mostrarAnuncioGanador && !estaGirando && ultimoResultado ? <WinnerCard result={ultimoResultado} onClose={ocultarAnuncioGanador} onSpin={girarRuleta} canSpin={disponibles > 0} persistent={ruleta.juego.mantenerResultado} /> : null}
-      <ProbabilityInfo prizes={ruleta.gajos} removed={ruleta.juego.retirarGanador ? retirados : []} mode={ruleta.juego.modoSectores} />
       <ResultHistory results={historial} removedCount={ruleta.juego.retirarGanador ? retirados.length : 0} onReset={reiniciarSesion} />
       <p className="game-shortcut">Pulsa Espacio para girar · Esc para salir de pantalla completa</p>
     </section>
