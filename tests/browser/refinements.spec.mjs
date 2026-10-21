@@ -161,3 +161,33 @@ test("long labels fit the wheel in both orientations and the custom message surv
   await expect(page.getByLabel("Mensaje al salir").first()).toHaveValue("¡Premio especial!");
   await page.screenshot({ path: "test-results/long-labels.png", fullPage: true });
 });
+
+test("history visibility persists without losing draws or trapping an exhausted session", async ({ page }) => {
+  await seed(page, { gajos: [100, 0, 0, 0].map((probabilidad, i) => ({ texto: `Premio ${i + 1}`, probabilidad, color: "#14b8a6" })) });
+  await page.goto(".");
+  await page.getByRole("tab", { name: "Apariencia" }).click();
+  await page.getByLabel("Mostrar historial de tiradas").uncheck();
+  await expect(page.getByText("Borrador guardado en este dispositivo", { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole("tab", { name: "Apariencia" }).click();
+  await expect(page.getByLabel("Mostrar historial de tiradas")).not.toBeChecked();
+  await page.getByRole("button", { name: "Jugar", exact: true }).click();
+  await expect(page.locator(".result-history")).toHaveCount(0);
+  await page.getByRole("button", { name: "Girar", exact: true }).click();
+  await expect(page.locator(".winner-card")).toBeVisible();
+  await page.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Sorteo finalizado" })).toBeDisabled();
+  await expect(page.locator(".result-history")).toHaveCount(0);
+  await page.getByRole("button", { name: "Volver al editor", exact: true }).click();
+  await page.getByRole("tab", { name: "Apariencia" }).click();
+  await page.getByLabel("Mostrar historial de tiradas").check();
+  await page.getByRole("button", { name: "Jugar", exact: true }).click();
+  await expect(page.locator(".result-history summary")).toContainText("1");
+  await page.getByRole("button", { name: "Volver al editor", exact: true }).click();
+  await page.getByRole("tab", { name: "Apariencia" }).click();
+  await page.getByLabel("Mostrar historial de tiradas").uncheck();
+  await page.getByRole("button", { name: "Jugar", exact: true }).click();
+  await page.getByRole("button", { name: "Reiniciar sesión", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Girar", exact: true })).toBeEnabled();
+  await expect(page.locator(".result-history")).toHaveCount(0);
+});

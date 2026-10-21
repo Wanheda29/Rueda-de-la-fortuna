@@ -44,6 +44,8 @@ test("game settings default and clamp duration; palettes choose contrasting text
   assert.equal(normalizeGame({ duracion: 500 }).duracion, 12);
   assert.equal(normalizeGame({ duracion: -4 }).duracion, 2);
   assert.equal(normalizeGame({ sonido: false }).sonido, false);
+  assert.equal(normalizeGame().mostrarHistorial, true);
+  assert.equal(normalizeGame({ mostrarHistorial: false }).mostrarHistorial, false);
   assert.equal(textColor("#ffffff"), "#111111");
   assert.equal(textColor("#000000"), "#ffffff");
 });
