@@ -1,5 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import { supabase, supabaseConfigured } from "./supabaseClient";
+import { supabase, supabaseConfigured, secureEditingEnabled } from "./supabaseClient";
+import { useWheelDraft } from "./useWheelDraft";
+import { DEFAULT_GAME, normalizeGame, textColor, eligiblePrizes, choosePrize, wheelSlices, wheelBackground, sliceAtPointer, validateWheelImport } from "./features.mjs";
+import { QuickPrizes, GameSettings, CenterImageSettings, ResultHistory } from "./EditorExtras";
+import { WheelFace } from "./WheelFace";
+import { ProbabilityInfo, SavedLibrary, WinnerCard, PresentationControls, SoundLevels } from "./Refinements";
 
 const STORAGE_KEY = "ruletas-editables";
 const ONLINE_QUERY_PARAM = "ruleta";
@@ -55,6 +60,7 @@ const ruletaInicial = {
     imagen: "",
     opacidad: 100,
   },
+  juego: DEFAULT_GAME,
   gajos: [
     {
       texto: "100 puntos",
@@ -117,7 +123,8 @@ const ruletaInicial = {
 
 function App() {
   const [vista, setVista] = useState("editor");
-  const [ruleta, setRuleta] = useState(() => normalizarRuleta(ruletaInicial));
+  const draft = useWheelDraft(normalizarRuleta(ruletaInicial), normalizarRuleta);
+  const { wheel: ruleta, setWheel: setRuleta, replaceWheel: replaceRuleta } = draft;
   const [ruletasGuardadas, setRuletasGuardadas] = useState(() =>
     cargarRuletasGuardadas()
   );
@@ -142,18 +149,77 @@ function App() {
   const audioContextRef = useRef(null);
   const tickBufferRef = useRef(null);
   const tickBufferPromiseRef = useRef(null);
+  const giroTimerRef = useRef(null);
+  const girandoRef = useRef(false);
+  const winnerAudioRef = useRef(null);
+  const onlineRequestRef = useRef(0);
+  const [historial, setHistorial] = useState([]);
+  const [retirados, setRetirados] = useState([]);
+  const [pantallaCompleta, setPantallaCompleta] = useState(false);
+  const [mensajeJuego, setMensajeJuego] = useState("");
+  const [movimientoReducido, setMovimientoReducido] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const [avisoLocal, setAvisoLocal] = useState("");
+  const configJuegoRef = useRef(ruleta.juego);
+  configJuegoRef.current = ruleta.juego;
+  const gajosDisponibles = eligiblePrizes(ruleta.gajos, ruleta.juego.retirarGanador ? retirados : []);
+  const animacionesActivas = ruleta.juego.animaciones && !movimientoReducido;
 
   const anguloPorGajo = 360 / ruleta.gajos.length;
-  const fondoRuleta = crearFondoRuleta(ruleta.gajos);
+  const fondoRuleta = wheelBackground(ruleta.gajos, ruleta.juego.modoSectores);
   const fondoModoJuego = crearEstiloFondoJuego(ruleta.fondoJuego);
 
   useEffect(
     () => () => {
       detenerSonidoGajos();
+      window.clearTimeout(giroTimerRef.current);
+      winnerAudioRef.current?.pause();
       audioContextRef.current?.close();
     },
     []
   );
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setMovimientoReducido(query.matches);
+    query.addEventListener("change", update);
+    const fullscreen = () => setPantallaCompleta(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", fullscreen);
+    return () => { query.removeEventListener("change", update); document.removeEventListener("fullscreenchange", fullscreen); };
+  }, []);
+
+  useEffect(() => {
+    if (vista !== "editor") return;
+    const keyboard = event => {
+      if (!(event.ctrlKey || event.metaKey) || !["z", "y"].includes(event.key.toLowerCase())) return;
+      if (event.target.closest("input, textarea, select, [contenteditable=true]")) return;
+      event.preventDefault();
+      limpiarEnlace();
+      if (event.key.toLowerCase() === "y" || event.shiftKey) draft.redo(); else draft.undo();
+    };
+    window.addEventListener("keydown", keyboard);
+    return () => window.removeEventListener("keydown", keyboard);
+  }, [vista, draft.undo, draft.redo]);
+
+  useEffect(() => {
+    onlineRequestRef.current += 1;
+    setEstadoOnline(actual => actual.estado === "loading" ? { estado: "idle", mensaje: "Hay cambios nuevos. Vuelve a guardar online cuando termines." } : actual);
+  }, [ruleta]);
+
+  useEffect(() => {
+    if (winnerAudioRef.current) winnerAudioRef.current.volume = ruleta.juego.sonido ? ruleta.juego.volumenResultado / 100 : 0;
+  }, [ruleta.juego.sonido, ruleta.juego.volumenResultado]);
+
+  useEffect(() => {
+    if (ruleta.juego.sonido && girandoRef.current && animacionesActivas) iniciarSonidoGajos();
+  }, [ruleta.juego.sonido]);
+
+  useEffect(() => {
+    // A changed design starts a fresh draw pool; retiring winners never edits the design.
+    setRetirados([]);
+    setHistorial([]);
+    setUltimoResultado(null);
+    setMostrarAnuncioGanador(false);
+  }, [ruleta.gajos]);
 
   useEffect(() => {
     const parametros = new URLSearchParams(window.location.search);
@@ -174,7 +240,7 @@ function App() {
         elementoActivo?.tagName === "TEXTAREA" ||
         elementoActivo?.tagName === "SELECT";
 
-      if (event.code === "Space" && !estaEscribiendo) {
+      if (event.code === "Space" && !event.repeat && !estaEscribiendo && elementoActivo?.tagName !== "BUTTON") {
         event.preventDefault();
         girarRuleta();
       }
@@ -189,7 +255,7 @@ function App() {
     const debeGirarLento =
       vista === "editor" ||
       (vista === "juego" && !estaGirando && !ultimoResultado);
-    if (!debeGirarLento) return undefined;
+    if (!debeGirarLento || !animacionesActivas) return undefined;
 
     let frameId;
     let tiempoAnterior;
@@ -216,7 +282,7 @@ function App() {
     frameId = window.requestAnimationFrame(animar);
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [vista, estaGirando, ultimoResultado]);
+  }, [vista, estaGirando, ultimoResultado, animacionesActivas]);
 
   function actualizarGajo(index, propiedad, valor) {
     setRuleta((ruletaActual) => ({
@@ -270,6 +336,94 @@ function App() {
         [propiedad]: valor,
       },
     }));
+  }
+
+  function duplicarGajo(index) {
+    setRuleta(actual => {
+      if (actual.gajos.length >= MAX_GAJOS) return actual;
+      const gajos = [...actual.gajos];
+      gajos.splice(index + 1, 0, { ...gajos[index] });
+      return { ...actual, gajos: repartirProbabilidadesIguales(gajos) };
+    });
+  }
+
+  function moverGajo(index, direction) {
+    setRuleta(actual => {
+      const next = index + direction;
+      if (next < 0 || next >= actual.gajos.length) return actual;
+      const gajos = [...actual.gajos];
+      [gajos[index], gajos[next]] = [gajos[next], gajos[index]];
+      return { ...actual, gajos };
+    });
+  }
+
+  function aplicarPaleta(colors) {
+    setRuleta(actual => ({ ...actual, gajos: actual.gajos.map((gajo, i) => ({ ...gajo, color: colors[i % colors.length], colorTexto: textColor(colors[i % colors.length]) })) }));
+  }
+
+  function importarPremios(names) {
+    setRuleta(actual => ({ ...actual, gajos: repartirProbabilidadesIguales(names.map((texto, i) => ({ ...crearGajoNuevo(i), texto }))) }));
+  }
+
+  function actualizarJuego(propiedad, valor) {
+    setRuleta(actual => ({ ...actual, juego: { ...actual.juego, [propiedad]: valor } }));
+    if (propiedad === "sonido" && !valor) detenerSonidoGajos();
+  }
+
+  function reiniciarSesion() {
+    resetearTirada();
+    setRetirados([]);
+    setHistorial([]);
+  }
+
+  async function alternarPantallaCompleta() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+      setMensajeJuego("");
+    } catch { setMensajeJuego("El navegador no permite pantalla completa aquí. Puedes usar F11."); }
+  }
+
+  function limpiarEnlace() {
+    onlineRequestRef.current += 1;
+    setEnlaceCompartido("");
+    setEstadoOnline({ estado: "idle", mensaje: "" });
+    const url = new URL(window.location.href);
+    url.searchParams.delete(ONLINE_QUERY_PARAM);
+    window.history.replaceState(null, "", url);
+  }
+
+  function exportarRuleta() {
+    const blob = new Blob([JSON.stringify(ruleta, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${(ruleta.nombre || "ruleta").replace(/[^\p{L}\p{N}_-]/gu, "-")}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function duplicarVersion(source) {
+    const copy = normalizarRuleta({ ...source, id: crearId(), nombre: `${source.nombre} (copia)`, guardadaEn: new Date().toISOString() });
+    const next = [copy, ...ruletasGuardadas];
+    setRuletasGuardadas(next);
+    setAvisoLocal(guardarEnStorage(next) ? "Versión duplicada en tu biblioteca." : "No se pudo guardar la copia. Exporta la ruleta para conservarla.");
+  }
+
+  async function importarArchivo(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      if (file.size > 8 * 1024 * 1024) throw new Error("La copia es demasiado grande. Usa un archivo de hasta 8 MB.");
+      const imported = validateWheelImport(JSON.parse(await file.text()));
+      const copy = normalizarRuleta({ ...imported, id: crearId(), guardadaEn: new Date().toISOString() });
+      limpiarEnlace();
+      resetearTirada();
+      setRuleta(copy);
+      guardarRuletaLocal(copy);
+      setAvisoLocal(actual => actual.startsWith("No se pudo") ? actual : "Copia importada en tu biblioteca. Puedes deshacer el cambio de diseño.");
+    } catch (error) { setAvisoLocal(error instanceof SyntaxError ? "El archivo no contiene JSON válido." : error.message); }
   }
 
   function actualizarFondoJuego(propiedad, valor) {
@@ -371,9 +525,9 @@ function App() {
       ...ruletasGuardadas.filter((item) => item.id !== ruletaParaGuardar.id),
     ];
 
-    setRuleta(ruletaParaGuardar);
+    replaceRuleta(ruletaParaGuardar);
     setRuletasGuardadas(siguientesRuletas);
-    guardarEnStorage(siguientesRuletas);
+    setAvisoLocal(guardarEnStorage(siguientesRuletas) ? "Ruleta guardada en este dispositivo." : "No se pudo guardar. Exporta una copia de la ruleta.");
   }
 
   async function guardarRuletaOnline() {
@@ -386,8 +540,9 @@ function App() {
     }
 
     const ruletaNormalizada = normalizarRuleta(ruleta);
-    const id = ruletaNormalizada.id || crearId();
+    let id = ruletaNormalizada.id || crearId();
     const nombre = ruletaNormalizada.nombre.trim() || "Ruleta sin nombre";
+    const requestId = ++onlineRequestRef.current;
 
     setEstadoOnline({
       estado: "loading",
@@ -395,18 +550,31 @@ function App() {
     });
 
     try {
+      let ownerId = null;
+      let guardarComoCopia = false;
+      if (secureEditingEnabled) {
+        ownerId = await obtenerUsuarioEditor();
+        const { data: existente, error: consultaError } = await supabase.from("wheels").select("owner_id").eq("id", id).maybeSingle();
+        if (consultaError) throw consultaError;
+        guardarComoCopia = Boolean(existente && existente.owner_id !== ownerId);
+        if (guardarComoCopia) id = crearId();
+      }
+      if (requestId !== onlineRequestRef.current) return;
       const configOnline = await prepararRuletaOnline(
         {
           ...ruletaNormalizada,
           id,
           nombre,
         },
-        id
+        ownerId ? `${ownerId}/${id}` : id
       );
+
+      if (requestId !== onlineRequestRef.current) return;
 
       const { error } = await supabase.from("wheels").upsert({
         id,
         name: nombre,
+        ...(ownerId ? { owner_id: ownerId } : {}),
         config_json: configOnline,
         updated_at: new Date().toISOString(),
       });
@@ -414,6 +582,7 @@ function App() {
       if (error) {
         throw error;
       }
+      if (requestId !== onlineRequestRef.current) return;
 
       const enlace = crearEnlaceCompartido(id);
       const ruletaGuardada = {
@@ -423,15 +592,16 @@ function App() {
         guardadaEn: new Date().toISOString(),
       };
 
-      setRuleta(ruletaGuardada);
+      replaceRuleta(ruletaGuardada);
       setEnlaceCompartido(enlace);
       guardarRuletaLocal(ruletaGuardada);
       window.history.replaceState(null, "", enlace);
       setEstadoOnline({
         estado: "success",
-        mensaje: "Ruleta guardada online. El enlace ya esta listo.",
+        mensaje: guardarComoCopia ? "Se guardó una copia propia. La ruleta compartida conserva su enlace original." : "Ruleta guardada online. El enlace ya está listo.",
       });
     } catch (error) {
+      if (requestId !== onlineRequestRef.current) return;
       setEstadoOnline({
         estado: "error",
         mensaje: `No se pudo guardar online: ${error.message}`,
@@ -440,6 +610,7 @@ function App() {
   }
 
   async function cargarRuletaOnline(id) {
+    const requestId = ++onlineRequestRef.current;
     if (!supabaseConfigured) {
       setEstadoOnline({
         estado: "error",
@@ -463,6 +634,7 @@ function App() {
       if (error) {
         throw error;
       }
+      if (requestId !== onlineRequestRef.current) return;
 
       const ruletaOnline = normalizarRuleta({
         ...data.config_json,
@@ -480,6 +652,7 @@ function App() {
         mensaje: "Ruleta compartida cargada correctamente.",
       });
     } catch (error) {
+      if (requestId !== onlineRequestRef.current) return;
       setEstadoOnline({
         estado: "error",
         mensaje: `No se pudo cargar la ruleta: ${error.message}`,
@@ -489,20 +662,15 @@ function App() {
 
   async function copiarEnlaceCompartido() {
     if (!enlaceCompartido) return;
-
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(enlaceCompartido);
-    } else {
-      window.prompt("Copia este enlace:", enlaceCompartido);
-    }
-
-    setEstadoOnline({
-      estado: "success",
-      mensaje: "Enlace copiado.",
-    });
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(enlaceCompartido);
+      else { window.prompt("Copia este enlace:", enlaceCompartido); return; }
+      setEstadoOnline({ estado: "success", mensaje: "Enlace copiado." });
+    } catch { setEstadoOnline({ estado: "error", mensaje: "No se pudo copiar. Selecciona el enlace y cópialo manualmente." }); }
   }
 
   function crearNuevaRuleta() {
+    limpiarEnlace();
     const siguienteNumero = ruletasGuardadas.length + 1;
     setRuleta(
       normalizarRuleta({
@@ -515,6 +683,7 @@ function App() {
   }
 
   function cargarRuletaGuardada(ruletaGuardada) {
+    limpiarEnlace();
     setRuleta(normalizarRuleta(ruletaGuardada));
     resetearTirada();
   }
@@ -531,11 +700,16 @@ function App() {
   }
 
   function volverAlEditor() {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     resetearTirada();
     setVista("editor");
   }
 
   function resetearTirada() {
+    window.clearTimeout(giroTimerRef.current);
+    giroTimerRef.current = null;
+    girandoRef.current = false;
+    winnerAudioRef.current?.pause();
     detenerSonidoGajos();
     setAnimarRuleta(false);
     rotacionActualRef.current = 0;
@@ -543,29 +717,40 @@ function App() {
     setEstaGirando(false);
     setConfetiId(0);
     setMostrarAnuncioGanador(false);
+    setUltimoResultado(null);
+    setMensajeJuego("");
   }
 
   function girarRuleta() {
-    if (estaGirando) return;
+    if (girandoRef.current) return;
+    const gajoGanador = choosePrize(gajosDisponibles);
+    if (!gajoGanador) { setMensajeJuego("No quedan premios disponibles. Reinicia la sesión para volver a jugar."); return; }
+    girandoRef.current = true;
+    const duracion = animacionesActivas ? ruleta.juego.duracion * 1000 : 120;
 
     prepararSonidoTick();
     setEstaGirando(true);
-    setAnimarRuleta(true);
+    setAnimarRuleta(animacionesActivas);
     setMostrarAnuncioGanador(false);
+    setUltimoResultado(null);
 
     const vueltasMinimas = 360 * 5;
-    const nuevoIndiceGanador = elegirIndicePorProbabilidad(ruleta.gajos);
-    const margenBorde = anguloPorGajo * 0.01;
-    const rangoSeguro = anguloPorGajo - margenBorde * 2;
+    const nuevoIndiceGanador = gajoGanador.index;
+    const slice = wheelSlices(ruleta.gajos, ruleta.juego.modoSectores)[nuevoIndiceGanador];
+    const margenBorde = slice.span * 0.02;
+    const rangoSeguro = slice.span - margenBorde * 2;
     const offsetAleatorio =
       Math.random() * rangoSeguro - rangoSeguro / 2;
     const posicionDentroDelGajo =
-      nuevoIndiceGanador * anguloPorGajo + offsetAleatorio;
+      slice.center + offsetAleatorio;
     const anguloObjetivo = normalizarAngulo(360 - posicionDentroDelGajo);
-    const gajoGanador = ruleta.gajos[nuevoIndiceGanador];
     const resultado = {
       texto: gajoGanador.texto,
       color: gajoGanador.color,
+      indice: nuevoIndiceGanador,
+      mensajeResultado: gajoGanador.mensajeResultado || "Resultado",
+      id: crearId(),
+      fecha: new Date().toISOString(),
     };
 
     setRotacion(() => {
@@ -579,23 +764,27 @@ function App() {
       return nuevaRotacion;
     });
 
-    iniciarSonidoGajos(anguloPorGajo);
+    if (animacionesActivas && ruleta.juego.sonido) iniciarSonidoGajos(anguloPorGajo);
 
-    window.setTimeout(() => {
+    giroTimerRef.current = window.setTimeout(() => {
+      giroTimerRef.current = null;
+      girandoRef.current = false;
       detenerSonidoGajos();
       reproducirSonidoGanador();
       setUltimoResultado(resultado);
       setEstaGirando(false);
-      setConfetiId((idActual) => idActual + 1);
+      setHistorial(actual => [resultado, ...actual].slice(0, 100));
+      if (ruleta.juego.retirarGanador) setRetirados(actual => [...actual, nuevoIndiceGanador]);
+      if (configJuegoRef.current.confeti && !movimientoReducido) setConfetiId((idActual) => idActual + 1);
       setMostrarAnuncioGanador(true);
-    }, 6240);
+    }, duracion + (animacionesActivas ? 40 : 0));
   }
 
   function ocultarAnuncioGanador() {
     setMostrarAnuncioGanador(false);
   }
 
-  function iniciarSonidoGajos(anguloActualPorGajo) {
+  function iniciarSonidoGajos() {
     detenerSonidoGajos();
     prepararSonidoTick();
 
@@ -606,9 +795,7 @@ function App() {
 
     function revisarGajo(tiempoActual) {
       const anguloVisual = obtenerRotacionVisual(ruletaVisualRef.current);
-      const indiceGajo = Math.floor(
-        normalizarAngulo(anguloVisual) / anguloActualPorGajo
-      );
+      const indiceGajo = sliceAtPointer(wheelSlices(ruleta.gajos, ruleta.juego.modoSectores), anguloVisual);
       const tiempoAnterior = ultimoFrameTickTiempoRef.current;
       const anguloAnterior = ultimoAnguloTickRef.current;
       const diferenciaTiempo = tiempoAnterior ? tiempoActual - tiempoAnterior : 0;
@@ -646,6 +833,7 @@ function App() {
   }
 
   function reproducirTick() {
+    if (!configJuegoRef.current.sonido) return;
     const audioContext = audioContextRef.current;
     const tickBuffer = tickBufferRef.current;
 
@@ -655,19 +843,22 @@ function App() {
     const volumen = audioContext.createGain();
 
     fuente.buffer = tickBuffer;
-    volumen.gain.value = 0.65;
+    volumen.gain.value = configJuegoRef.current.volumenGiro / 100;
     fuente.connect(volumen);
     volumen.connect(audioContext.destination);
     fuente.start();
   }
 
   function reproducirSonidoGanador() {
+    if (!configJuegoRef.current.sonido) return;
     const audio = new Audio(WINNER_SOUND_URL);
-    audio.volume = 0.85;
+    winnerAudioRef.current = audio;
+    audio.volume = configJuegoRef.current.volumenResultado / 100;
     audio.play().catch(() => {});
   }
 
   function prepararSonidoTick() {
+    if (!configJuegoRef.current.sonido || (!window.AudioContext && !window.webkitAudioContext)) return;
     const audioContext = obtenerAudioContext();
 
     if (audioContext.state === "suspended") {
@@ -731,6 +922,8 @@ function App() {
           estadoOnline={estadoOnline}
           enlaceCompartido={enlaceCompartido}
           supabaseConfigurado={supabaseConfigured}
+          herramientas={{ ...draft, avisoLocal, exportarRuleta, duplicarGajo, moverGajo, aplicarPaleta, importarPremios, actualizarJuego, movimientoReducido, duplicarVersion, importarArchivo, retirados: ruleta.juego.retirarGanador ? retirados : [],
+            undo: () => { limpiarEnlace(); draft.undo(); }, redo: () => { limpiarEnlace(); draft.redo(); } }}
         />
       ) : (
         <VistaJuego
@@ -747,6 +940,14 @@ function App() {
           girarRuleta={girarRuleta}
           ocultarAnuncioGanador={ocultarAnuncioGanador}
           volverAlEditor={volverAlEditor}
+          historial={historial}
+          retirados={retirados}
+          disponibles={gajosDisponibles.length}
+          reiniciarSesion={reiniciarSesion}
+          alternarPantallaCompleta={alternarPantallaCompleta}
+          pantallaCompleta={pantallaCompleta}
+          mensajeJuego={mensajeJuego}
+          actualizarJuego={actualizarJuego}
         />
       )}
     </main>
@@ -782,8 +983,10 @@ function EditorRuleta({
   estadoOnline,
   enlaceCompartido,
   supabaseConfigurado,
+  herramientas,
 }) {
   const [pestana, setPestana] = useState("gajos");
+  const [previewOpen, setPreviewOpen] = useState(() => window.matchMedia("(min-width: 981px)").matches);
   const totalProbabilidad = ruleta.gajos.reduce(
     (total, gajo) => total + (Number(gajo.probabilidad) || 0),
     0
@@ -823,6 +1026,15 @@ function EditorRuleta({
       </div>
 
 
+      <div className="draft-toolbar">
+        <p role="status">{herramientas.saveState}</p>
+        <div>
+          <button type="button" className="ghost-button" disabled={!herramientas.canUndo} onClick={herramientas.undo}>Deshacer</button>
+          <button type="button" className="ghost-button" disabled={!herramientas.canRedo} onClick={herramientas.redo}>Rehacer</button>
+          <button type="button" className="ghost-button" onClick={herramientas.exportarRuleta}>Exportar copia</button>
+        </div>
+        {herramientas.avisoLocal && <p role="status">{herramientas.avisoLocal}</p>}
+      </div>
       <div className="creator-grid">
         <section className="editor-panel" aria-label="Configuración de ruleta">
           <div className="editor-tabs" role="tablist" aria-label="Secciones de configuración">
@@ -877,7 +1089,9 @@ function EditorRuleta({
                 Agregar gajo
               </button>
             </div>
-            <p className="probability-hint">Al cambiar una probabilidad, las demás se ajustan para mantener el total en 100%. El tamaño visual de los gajos es igual.</p>
+            <p className="probability-hint">Al cambiar una probabilidad, las demás se ajustan para mantener el total en 100%. {ruleta.juego.modoSectores === "proporcionales" ? "Los sectores representan las probabilidades originales." : "Los gajos tienen el mismo tamaño visual."}</p>
+            <QuickPrizes onPalette={herramientas.aplicarPaleta} onImport={herramientas.importarPremios} />
+            <ProbabilityInfo prizes={ruleta.gajos} removed={herramientas.retirados} mode={ruleta.juego.modoSectores} />
             <div className="prize-list">
               {ruleta.gajos.map((gajo, index) => (
                 <EditorGajo
@@ -887,6 +1101,9 @@ function EditorRuleta({
                   actualizarGajo={actualizarGajo}
                   eliminarGajo={eliminarGajo}
                   puedeEliminar={ruleta.gajos.length > MIN_GAJOS}
+                  duplicarGajo={herramientas.duplicarGajo}
+                  moverGajo={herramientas.moverGajo}
+                  total={ruleta.gajos.length}
                 />
               ))}
             </div>
@@ -981,6 +1198,7 @@ function EditorRuleta({
             >
               Ocupar todo el centro
             </button>
+            <CenterImageSettings center={ruleta.centro} onChange={actualizarCentro} />
           </div>
 
           <div className="background-editor">
@@ -1058,39 +1276,12 @@ function EditorRuleta({
           </div>
 
 
+            <GameSettings value={ruleta.juego} onChange={herramientas.actualizarJuego} reducedMotion={herramientas.movimientoReducido} />
+
           </div>
 
           <div className="editor-section" id="panel-guardadas" role="tabpanel" aria-labelledby="tab-guardadas" hidden={pestana !== "guardadas"}>
-          <section className="saved-panel" aria-label="Ruletas guardadas">
-            <h2>Ruletas guardadas</h2>
-            {ruletasGuardadas.length > 0 ? (
-              <div className="saved-list">
-                {ruletasGuardadas.map((ruletaGuardada) => (
-                  <div className="saved-item" key={ruletaGuardada.id}>
-                    <strong>{ruletaGuardada.nombre}</strong>
-                    <div>
-                      <button
-                        className="secondary-button"
-                        type="button"
-                        onClick={() => cargarRuletaGuardada(ruletaGuardada)}
-                      >
-                        Cargar
-                      </button>
-                      <button
-                        className="ghost-button"
-                        type="button"
-                        onClick={() => eliminarRuletaGuardada(ruletaGuardada.id)}
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="saved-empty"><strong>Tu próxima ruleta empieza aquí</strong><p>Usa Guardar ruleta para conservar esta versión en este dispositivo.</p></div>
-            )}
-          </section>
+          <SavedLibrary wheels={ruletasGuardadas} onLoad={cargarRuletaGuardada} onDelete={eliminarRuletaGuardada} onDuplicate={herramientas.duplicarVersion} onImport={herramientas.importarArchivo} />
 
           <div className="online-panel">
             <div>
@@ -1103,7 +1294,7 @@ function EditorRuleta({
 
             {!supabaseConfigurado ? (
               <p className="online-message error">
-                Falta configurar Supabase en las variables de entorno.
+                El guardado online no está conectado en esta prueba local. Puedes guardar en este dispositivo o exportar una copia.
               </p>
             ) : null}
 
@@ -1131,32 +1322,32 @@ function EditorRuleta({
           </div>
         </section>
 
-        <aside className="preview-panel" aria-label="Vista previa">
+        <aside className="preview-panel" aria-label="Vista previa" data-collapsed={!previewOpen}>
           <div className="preview-heading">
             <div>
               <p className="eyebrow">Vista previa</p>
               <h2>{ruleta.nombre || "Ruleta sin nombre"}</h2>
             </div>
             <span className="preview-badge"><span aria-hidden="true" />En vivo</span>
+            <button type="button" className="ghost-button preview-toggle" aria-expanded={previewOpen} aria-controls="preview-content" onClick={() => setPreviewOpen(value => !value)}>{previewOpen ? "Ocultar rueda" : "Ver rueda"}</button>
           </div>
+          <div className="preview-content" id="preview-content">
           <div className="preview-stage" style={crearEstiloFondoJuego(ruleta.fondoJuego)}>
-            <RuletaVisual
-              ruleta={ruleta}
-              fondoRuleta={fondoRuleta}
-              anguloPorGajo={anguloPorGajo}
-              rotacion={rotacion}
-              ruletaVisualRef={ruletaVisualRef}
-              animarRuleta={false}
-            />
+            <GameScene ruleta={ruleta} fondoRuleta={fondoRuleta} anguloPorGajo={anguloPorGajo} rotacion={rotacion} ruletaVisualRef={ruletaVisualRef} preview ultimoResultado={ruleta.gajos[0]} />
           </div>
           <p className="preview-note">Los cambios se reflejan al instante. Pulsa Jugar para probar la ruleta.</p>
+          </div>
         </aside>
       </div>
+      <nav className="mobile-editor-actions" aria-label="Acciones rápidas">
+        <button type="button" className="secondary-button" onClick={() => { setPreviewOpen(true); document.querySelector(".preview-panel")?.scrollIntoView({ behavior: herramientas.movimientoReducido ? "instant" : "smooth", block: "start" }); }}>Ver vista previa</button>
+        <button type="button" className="spin-button" onClick={abrirJuego}>Jugar</button>
+      </nav>
     </section>
   );
 }
 
-function EditorGajo({ gajo, index, actualizarGajo, eliminarGajo, puedeEliminar }) {
+function EditorGajo({ gajo, index, actualizarGajo, eliminarGajo, puedeEliminar, duplicarGajo, moverGajo, total }) {
   return (
     <article className="prize-item" style={{ "--slice-color": gajo.color }} aria-label={`Gajo ${index + 1}`}>
       <div className="slice-main">
@@ -1179,11 +1370,19 @@ function EditorGajo({ gajo, index, actualizarGajo, eliminarGajo, puedeEliminar }
           />
         </label>
       </div>
+      <div className="slice-tools">
+        <button type="button" className="ghost-button" aria-label={`Subir gajo ${index + 1}`} disabled={index === 0} onClick={() => moverGajo(index, -1)}>↑</button>
+        <button type="button" className="ghost-button" aria-label={`Bajar gajo ${index + 1}`} disabled={index === total - 1} onClick={() => moverGajo(index, 1)}>↓</button>
+        <button type="button" className="ghost-button" disabled={total >= MAX_GAJOS} onClick={() => duplicarGajo(index)}>Duplicar</button>
+      </div>
       <details className="slice-details">
         <summary>
           <span>Más opciones</span>
           <span className="slice-probability">{Number(gajo.probabilidad).toFixed(1)}%</span>
         </summary>
+        <label className="outcome-message">Mensaje al salir
+          <input type="text" maxLength="120" placeholder="Resultado, ¡Ganaste!, Pierdes turno…" value={gajo.mensajeResultado || ""} onChange={event => actualizarGajo(index, "mensajeResultado", event.target.value)} />
+        </label>
         <div className="slice-options">
           <label>
             Color del texto
@@ -1229,111 +1428,50 @@ function EditorGajo({ gajo, index, actualizarGajo, eliminarGajo, puedeEliminar }
 }
 
 function VistaJuego({
-  ruleta,
-  fondoRuleta,
-  anguloPorGajo,
-  rotacion,
-  ruletaVisualRef,
-  estaGirando,
-  ultimoResultado,
-  mostrarAnuncioGanador,
-  confetiId,
-  animarRuleta,
-  girarRuleta,
-  ocultarAnuncioGanador,
-  volverAlEditor,
+  ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando,
+  ultimoResultado, mostrarAnuncioGanador, confetiId, animarRuleta, girarRuleta,
+  ocultarAnuncioGanador, volverAlEditor, historial, retirados, disponibles,
+  reiniciarSesion, alternarPantallaCompleta, pantallaCompleta, mensajeJuego, actualizarJuego,
 }) {
   return (
-    <section className="play-layout" onClick={ocultarAnuncioGanador}>
-      {confetiId > 0 ? <Confeti key={confetiId} /> : null}
-
-      <header className="play-header">
-        <button className="secondary-button" type="button" onClick={volverAlEditor}>
-          Volver al editor
-        </button>
-      </header>
-
-      <div className="play-main">
-        {ruleta.logoJuego.imagen ? (
-          <div className="play-logo" aria-label="Logo del juego">
-            <img
-              src={ruleta.logoJuego.imagen}
-              alt=""
-              style={{ opacity: ruleta.logoJuego.opacidad / 100 }}
-            />
-          </div>
-        ) : null}
-
-        {mostrarAnuncioGanador && !estaGirando && ultimoResultado ? (
-          <ResultadoGanador resultado={ultimoResultado} />
-        ) : null}
-
-        <div className="wheel-stage play-wheel" aria-label="Ruleta de premios">
-          <RuletaVisual
-            ruleta={ruleta}
-            fondoRuleta={fondoRuleta}
-            anguloPorGajo={anguloPorGajo}
-            rotacion={rotacion}
-            ruletaVisualRef={ruletaVisualRef}
-            animarRuleta={estaGirando && animarRuleta}
-            onCenterClick={girarRuleta}
-          />
+    <section className="play-layout">
+      {confetiId > 0 && ruleta.juego.confeti ? <Confeti key={confetiId} /> : null}
+      <PresentationControls autoHide={ruleta.juego.ocultarControles} spinning={estaGirando} resultOpen={mostrarAnuncioGanador}>
+        <button className="secondary-button" type="button" onClick={volverAlEditor}>Volver al editor</button>
+        <div>
+          <SoundLevels value={ruleta.juego} onChange={actualizarJuego} />
+          <button className="ghost-button" type="button" aria-pressed={!ruleta.juego.sonido} onClick={() => actualizarJuego("sonido", !ruleta.juego.sonido)}>{ruleta.juego.sonido ? "Silenciar" : "Activar sonido"}</button>
+          <button className="ghost-button" type="button" onClick={alternarPantallaCompleta}>{pantallaCompleta ? "Salir de pantalla completa" : "Pantalla completa"}</button>
         </div>
-
-        <aside className="play-side">
-          {ruleta.mostrarUltimoResultado ? (
-            <div className="result-box" aria-live="polite">
-              <span>Ultimo resultado</span>
-              {estaGirando ? (
-                <strong>Girando...</strong>
-              ) : ultimoResultado ? (
-                <div className="result-value">
-                  <span
-                    className="result-color"
-                    style={{ background: ultimoResultado.color }}
-                    aria-hidden="true"
-                  />
-                  <strong>{ultimoResultado.texto || "Sin texto"}</strong>
-                </div>
-              ) : (
-                <strong>Aun no hay resultado</strong>
-              )}
-            </div>
-          ) : null}
-
-          <button
-            className="spin-button"
-            type="button"
-            onClick={girarRuleta}
-            disabled={estaGirando}
-          >
-            <span aria-hidden="true">▶</span>
-            {estaGirando ? "Girando..." : "Girar"}
-          </button>
-        </aside>
-      </div>
+      </PresentationControls>
+      {mensajeJuego && <p className="game-message" role="status">{mensajeJuego}</p>}
+      <GameScene {...{ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando, ultimoResultado, animarRuleta, girarRuleta, disponibles}} />
+      {mostrarAnuncioGanador && !estaGirando && ultimoResultado ? <WinnerCard result={ultimoResultado} onClose={ocultarAnuncioGanador} onSpin={girarRuleta} canSpin={disponibles > 0} persistent={ruleta.juego.mantenerResultado} /> : null}
+      <ProbabilityInfo prizes={ruleta.gajos} removed={ruleta.juego.retirarGanador ? retirados : []} mode={ruleta.juego.modoSectores} />
+      <ResultHistory results={historial} removedCount={ruleta.juego.retirarGanador ? retirados.length : 0} onReset={reiniciarSesion} />
+      <p className="game-shortcut">Pulsa Espacio para girar · Esc para salir de pantalla completa</p>
     </section>
   );
 }
 
-function ResultadoGanador({ resultado }) {
-  const textoResultado = String(resultado.texto || "").trim();
-  const tieneTexto = textoResultado.length > 0;
-
-  return (
-    <div className="winner-announcement" role="status" aria-live="polite">
-      <strong>¡Ganaste!</strong>
-      {tieneTexto ? (
-        <span>{textoResultado}</span>
-      ) : (
-        <span
-          className="winner-color"
-          style={{ background: resultado.color }}
-          aria-label="Color del gajo ganador"
-        />
-      )}
+function GameScene({ ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando = false, ultimoResultado, animarRuleta = false, girarRuleta, disponibles = 1, preview = false }) {
+  return <div className={preview ? "game-scene scene-preview" : "game-scene"}>
+    {ruleta.mostrarTitulo && <h2 className="scene-title">{ruleta.nombre || "Ruleta sin nombre"}</h2>}
+    <div className={ruleta.logoJuego.imagen ? "play-main" : "play-main without-logo"}>
+      {ruleta.logoJuego.imagen && <div className="play-logo" aria-label="Logo del juego"><img src={ruleta.logoJuego.imagen} alt="Logo del juego" style={{ opacity: ruleta.logoJuego.opacidad / 100 }} /></div>}
+      <div className="wheel-stage play-wheel" aria-label="Ruleta de premios">
+        <RuletaVisual {...{ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef}} winnerIndex={!preview && !estaGirando ? ultimoResultado?.indice : undefined} animarRuleta={estaGirando && animarRuleta} onCenterClick={!preview && !estaGirando && disponibles > 0 ? girarRuleta : undefined} />
+      </div>
+      <aside className="play-side">
+        {ruleta.mostrarUltimoResultado && <div className="result-box" aria-live={preview ? "off" : "polite"}>
+          <span>{preview ? "Ejemplo de resultado" : "Último resultado"}</span>
+          {estaGirando ? <strong>Girando…</strong> : ultimoResultado ? <div className="result-value"><span className="result-color" style={{ background: ultimoResultado.color }} aria-hidden="true" /><strong>{ultimoResultado.texto || "Sin texto"}</strong></div> : <strong>Aún no hay resultado</strong>}
+        </div>}
+        <button type="button" className="spin-button" disabled={preview || estaGirando || !disponibles} onClick={girarRuleta}>{estaGirando ? "Girando…" : !disponibles ? "Sorteo finalizado" : "Girar"}</button>
+        {!preview && ruleta.juego.retirarGanador && <p className="remaining-prizes">{disponibles} premios disponibles</p>}
+      </aside>
     </div>
-  );
+  </div>;
 }
 
 function Confeti() {
@@ -1377,6 +1515,7 @@ function RuletaVisual({
   ruletaVisualRef,
   animarRuleta,
   onCenterClick,
+  winnerIndex,
 }) {
   return (
     <div className="wheel-wrap">
@@ -1386,39 +1525,12 @@ function RuletaVisual({
         className={`wheel ${animarRuleta ? "" : "no-transition"}`}
         style={{
           "--slice-angle": `${anguloPorGajo}deg`,
+          "--spin-duration": `${ruleta.juego.duracion}s`,
           background: fondoRuleta,
           transform: `rotate(${rotacion}deg)`,
         }}
       >
-        {ruleta.gajos.map((gajo, index) => (
-          <div
-            className="wheel-segment"
-            key={`gajo-${index}`}
-            style={{
-              transform: `rotate(${index * anguloPorGajo}deg)`,
-            }}
-          >
-            <span
-              style={{
-                color: gajo.colorTexto,
-                fontSize: `${gajo.tamanoTexto}px`,
-              }}
-            >
-              {gajo.texto}
-            </span>
-          </div>
-        ))}
-        {ruleta.gajos.map((_, index) => (
-          <span
-            className="wheel-divider"
-            key={`divider-${index}`}
-            style={{
-              transform: `translateX(-50%) rotate(${
-                index * anguloPorGajo - anguloPorGajo / 2
-              }deg)`,
-            }}
-          />
-        ))}
+        <WheelFace wheel={ruleta} winnerIndex={winnerIndex} />
       </div>
 
       <button
@@ -1435,6 +1547,8 @@ function RuletaVisual({
             style={{
               width: `${ruleta.centro.tamanoImagen / 116 * 100}%`,
               height: `${ruleta.centro.tamanoImagen / 116 * 100}%`,
+              objectFit: ruleta.centro.ajusteImagen,
+              objectPosition: `${ruleta.centro.posicionX}% ${ruleta.centro.posicionY}%`,
             }}
           />
         ) : null}
@@ -1579,8 +1693,9 @@ function cargarRuletasGuardadas() {
 function guardarEnStorage(ruletas) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(ruletas));
+    return true;
   } catch {
-    // Si el navegador bloquea el almacenamiento, la app sigue funcionando.
+    return false;
   }
 }
 
@@ -1614,7 +1729,8 @@ function normalizarRuleta(ruleta) {
       colorTexto: esColorHex(gajo?.colorTexto)
         ? gajo.colorTexto
         : gajoBase.colorTexto,
-      tamanoTexto: Number(gajo?.tamanoTexto) || gajoBase.tamanoTexto,
+      tamanoTexto: limitarNumero(Number(gajo?.tamanoTexto), 10, 22) || gajoBase.tamanoTexto,
+      mensajeResultado: String(gajo?.mensajeResultado || "").slice(0, 120),
       probabilidad:
         limitarNumero(Number(gajo?.probabilidad), 0, 100) ??
         gajoBase.probabilidad ??
@@ -1634,7 +1750,11 @@ function normalizarRuleta(ruleta) {
       typeof ruleta.mostrarUltimoResultado === "boolean"
         ? ruleta.mostrarUltimoResultado
         : ruletaInicial.mostrarUltimoResultado,
+    juego: normalizeGame(ruleta.juego),
     centro: {
+      ajusteImagen: ruleta.centro?.ajusteImagen === "contain" ? "contain" : "cover",
+      posicionX: limitarNumero(Number(ruleta.centro?.posicionX ?? 50), 0, 100) ?? 50,
+      posicionY: limitarNumero(Number(ruleta.centro?.posicionY ?? 50), 0, 100) ?? 50,
       texto: String(ruleta.centro?.texto ?? ruletaInicial.centro.texto),
       imagen: String(ruleta.centro?.imagen || ""),
       tamanoImagen:
@@ -1706,6 +1826,15 @@ async function prepararRuletaOnline(ruleta, idRuleta) {
       imagen: logoImagen,
     },
   };
+}
+
+async function obtenerUsuarioEditor() {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (sessionData.session?.user) return sessionData.session.user.id;
+  const { data, error } = await supabase.auth.signInAnonymously();
+  if (error) throw new Error("No se pudo iniciar la sesión de edición. Revisa la configuración de acceso online.");
+  return data.user.id;
 }
 
 async function subirImagenSiEsNecesario(valorImagen, rutaBase) {
