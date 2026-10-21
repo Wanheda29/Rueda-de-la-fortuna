@@ -48,15 +48,21 @@ function labelLayout(text, width, height, target, context, maxLines) {
 export function WheelFace({ wheel, winnerIndex }) {
   const ref = useRef(null);
   const [size, setSize] = useState(500);
+  const [centerSize, setCenterSize] = useState(116);
   const contextRef = useRef(null);
   if (!contextRef.current) contextRef.current = document.createElement("canvas").getContext("2d");
   useEffect(() => {
-    const observer = new ResizeObserver(([entry]) => { if (entry.contentRect.width > 0) setSize(entry.contentRect.width); });
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width > 0) {
+        setSize(entry.contentRect.width);
+        setCenterSize(ref.current.closest(".wheel-wrap")?.querySelector(".wheel-center")?.getBoundingClientRect().width || 116);
+      }
+    });
     observer.observe(ref.current);
     return () => observer.disconnect();
   }, []);
   const slices = wheelSlices(wheel.gajos, wheel.juego.modoSectores);
-  const inner = Math.max(170, Math.min(400, (Math.min(116, Math.max(86, (size + 20) * .22)) / 2 + 10) / size * 1000));
+  const inner = Math.max(170, Math.min(400, (centerSize / 2 + 10) / size * 1000));
   const radius = (inner + 450) / 2;
   return <svg ref={ref} className="wheel-face" viewBox="0 0 1000 1000" role="img" aria-label="Premios de la ruleta">
     {slices.filter(s => s.span > 0).map(slice => {

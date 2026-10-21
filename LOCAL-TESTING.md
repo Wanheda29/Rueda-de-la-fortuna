@@ -61,6 +61,12 @@ Referencias: [Supabase Auth anónimo](https://supabase.com/docs/reference/javasc
 
 ## Validación
 
+### Presentación vertical
+
+En pantallas verticales de al menos 760 px de alto, la rueda queda centrada al 47,5% de la altura; su diámetro es el menor entre el 72% del ancho y el 40,5% de la altura. «Girar» queda centrado debajo, separado un 4% de la altura. Los controles se sitúan arriba y el fondo conserva el tamaño del viewport aunque el historial o el resultado requieran desplazamiento. Las pantallas verticales más bajas usan una columna fluida.
+
+Probar en modo juego con la misma ruleta y fondo de las referencias, especialmente en 1080×1920. La prueba `portrait.spec.mjs` comprueba la composición en cinco resoluciones, el cambio a horizontal y la tarjeta de resultado debajo de la rueda.
+
 ```powershell
 npm.cmd test
 npm.cmd run test:e2e
