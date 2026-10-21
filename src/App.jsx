@@ -1445,15 +1445,15 @@ function VistaJuego({
         </div>
       </PresentationControls>
       {mensajeJuego && <p className="game-message" role="status">{mensajeJuego}</p>}
-      <GameScene {...{ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando, ultimoResultado, animarRuleta, girarRuleta, disponibles}} />
-      {mostrarAnuncioGanador && !estaGirando && ultimoResultado ? <WinnerCard result={ultimoResultado} onClose={ocultarAnuncioGanador} onSpin={girarRuleta} canSpin={disponibles > 0} persistent={ruleta.juego.mantenerResultado} /> : null}
+      <GameScene {...{ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando, ultimoResultado, animarRuleta, girarRuleta, disponibles}}
+        resultCard={mostrarAnuncioGanador && !estaGirando && ultimoResultado ? <WinnerCard result={ultimoResultado} onClose={ocultarAnuncioGanador} onSpin={girarRuleta} canSpin={disponibles > 0} persistent={ruleta.juego.mantenerResultado} /> : null} />
       <ResultHistory results={historial} removedCount={ruleta.juego.retirarGanador ? retirados.length : 0} onReset={reiniciarSesion} />
       <p className="game-shortcut">Pulsa Espacio para girar · Esc para salir de pantalla completa</p>
     </section>
   );
 }
 
-function GameScene({ ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando = false, ultimoResultado, animarRuleta = false, girarRuleta, disponibles = 1, preview = false }) {
+function GameScene({ ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando = false, ultimoResultado, animarRuleta = false, girarRuleta, disponibles = 1, preview = false, resultCard = null }) {
   return <div className={preview ? "game-scene scene-preview" : "game-scene"}>
     {ruleta.mostrarTitulo && <h2 className="scene-title">{ruleta.nombre || "Ruleta sin nombre"}</h2>}
     <div className={ruleta.logoJuego.imagen ? "play-main" : "play-main without-logo"}>
@@ -1462,11 +1462,11 @@ function GameScene({ ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualR
         <RuletaVisual {...{ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef}} winnerIndex={!preview && !estaGirando ? ultimoResultado?.indice : undefined} animarRuleta={estaGirando && animarRuleta} onCenterClick={!preview && !estaGirando && disponibles > 0 ? girarRuleta : undefined} />
       </div>
       <aside className="play-side">
-        {ruleta.mostrarUltimoResultado && <div className="result-box" aria-live={preview ? "off" : "polite"}>
+        {ruleta.mostrarUltimoResultado && !resultCard && <div className="result-box" aria-live={preview ? "off" : "polite"}>
           <span>{preview ? "Ejemplo de resultado" : "Último resultado"}</span>
           {estaGirando ? <strong>Girando…</strong> : ultimoResultado ? <div className="result-value"><span className="result-color" style={{ background: ultimoResultado.color }} aria-hidden="true" /><strong>{ultimoResultado.texto || "Sin texto"}</strong></div> : <strong>Aún no hay resultado</strong>}
         </div>}
-        <button type="button" className="spin-button" disabled={preview || estaGirando || !disponibles} onClick={girarRuleta}>{estaGirando ? "Girando…" : !disponibles ? "Sorteo finalizado" : "Girar"}</button>
+        {resultCard || <button type="button" className="spin-button" disabled={preview || estaGirando || !disponibles} onClick={girarRuleta}>{estaGirando ? "Girando…" : !disponibles ? "Sorteo finalizado" : "Girar"}</button>}
         {!preview && ruleta.juego.retirarGanador && <p className="remaining-prizes">{disponibles} premios disponibles</p>}
       </aside>
     </div>

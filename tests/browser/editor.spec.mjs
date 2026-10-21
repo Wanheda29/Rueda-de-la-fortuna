@@ -77,7 +77,7 @@ test("leaving a spin cancels its delayed winner, sound and history entry", async
   await page.getByRole("button", { name: "Girar", exact: true }).click();
   await page.getByRole("button", { name: "Volver al editor" }).click();
   await page.clock.runFor(3000);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".winner-card")).toHaveCount(0);
   await page.getByRole("button", { name: "Jugar", exact: true }).click();
   await expect(page.locator(".result-history summary")).toContainText("0");
   await expect(page.getByText("Aún no hay resultado", { exact: true })).toBeVisible();
@@ -88,8 +88,9 @@ test("turning off winner removal brings all prizes back into the pool", async ({
   await page.goto(".");
   await page.getByRole("button", { name: "Jugar", exact: true }).click();
   await page.getByRole("button", { name: "Girar", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Sorteo finalizado" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Volver a girar", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Sorteo finalizado" })).toBeDisabled();
   await page.getByRole("button", { name: "Volver al editor" }).click();
   await page.getByRole("tab", { name: "Apariencia" }).click();
   await page.getByLabel("Retirar al ganador después de cada tirada").uncheck();
