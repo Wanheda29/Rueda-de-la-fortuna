@@ -4,7 +4,7 @@ import { useWheelDraft } from "./useWheelDraft";
 import { DEFAULT_GAME, normalizeGame, textColor, eligiblePrizes, choosePrize, wheelSlices, wheelBackground, sliceAtPointer, validateWheelImport } from "./features.mjs";
 import { QuickPrizes, GameSettings, CenterImageSettings, ResultHistory } from "./EditorExtras";
 import { WheelFace } from "./WheelFace";
-import { ProbabilityInfo, SavedLibrary, WinnerCard, PresentationControls, SoundLevels } from "./Refinements";
+import { ProbabilityInfo, SavedLibrary, WinnerAnnouncement, PresentationControls, SoundLevels } from "./Refinements";
 
 const STORAGE_KEY = "ruletas-editables";
 const ONLINE_QUERY_PARAM = "ruleta";
@@ -1446,13 +1446,14 @@ function VistaJuego({
       </PresentationControls>
       {mensajeJuego && <p className="game-message" role="status">{mensajeJuego}</p>}
       <GameScene {...{ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando, ultimoResultado, animarRuleta, girarRuleta, disponibles}}
-        resultCard={mostrarAnuncioGanador && !estaGirando && ultimoResultado ? <WinnerCard result={ultimoResultado} onClose={ocultarAnuncioGanador} onSpin={girarRuleta} canSpin={disponibles > 0} persistent={ruleta.juego.mantenerResultado} showSpin={ruleta.juego.mostrarBotonGirar} /> : null} />
+        resultVisible={mostrarAnuncioGanador && !estaGirando && !!ultimoResultado} />
+      {mostrarAnuncioGanador && !estaGirando && ultimoResultado && <WinnerAnnouncement result={ultimoResultado} onClose={ocultarAnuncioGanador} persistent={ruleta.juego.mantenerResultado} />}
       {ruleta.juego.mostrarHistorial ? <ResultHistory results={historial} removedCount={ruleta.juego.retirarGanador ? retirados.length : 0} onReset={reiniciarSesion} /> : (historial.length > 0 || retirados.length > 0) && <div className="session-actions"><button className="ghost-button" type="button" onClick={reiniciarSesion}>Reiniciar sesión</button></div>}
     </section>
   );
 }
 
-function GameScene({ ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando = false, ultimoResultado, animarRuleta = false, girarRuleta, disponibles = 1, preview = false, resultCard = null }) {
+function GameScene({ ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando = false, ultimoResultado, animarRuleta = false, girarRuleta, disponibles = 1, preview = false, resultVisible = false }) {
   return <div className={preview ? "game-scene scene-preview" : "game-scene"}>
     {ruleta.mostrarTitulo && <h2 className="scene-title">{ruleta.nombre || "Ruleta sin nombre"}</h2>}
     <div className={ruleta.logoJuego.imagen ? "play-main" : "play-main without-logo"}>
@@ -1461,11 +1462,11 @@ function GameScene({ ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualR
         <RuletaVisual {...{ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef}} winnerIndex={!preview && !estaGirando ? ultimoResultado?.indice : undefined} animarRuleta={estaGirando && animarRuleta} onCenterClick={!preview && !estaGirando && disponibles > 0 ? girarRuleta : undefined} />
       </div>
       <aside className="play-side">
-        {ruleta.mostrarUltimoResultado && !resultCard && <div className="result-box" aria-live={preview ? "off" : "polite"}>
+        {ruleta.mostrarUltimoResultado && !resultVisible && <div className="result-box" aria-live={preview ? "off" : "polite"}>
           <span>{preview ? "Ejemplo de resultado" : "Último resultado"}</span>
           {estaGirando ? <strong>Girando…</strong> : ultimoResultado ? <div className="result-value"><span className="result-color" style={{ background: ultimoResultado.color }} aria-hidden="true" /><strong>{ultimoResultado.texto || "Sin texto"}</strong></div> : <strong>Aún no hay resultado</strong>}
         </div>}
-        {resultCard || (ruleta.juego.mostrarBotonGirar && <button type="button" className="spin-button" disabled={preview || estaGirando || !disponibles} onClick={girarRuleta}>{estaGirando ? "Girando…" : !disponibles ? "Sorteo finalizado" : "Girar"}</button>)}
+        {ruleta.juego.mostrarBotonGirar && <button type="button" className="spin-button" disabled={preview || estaGirando || !disponibles} onClick={girarRuleta}>{estaGirando ? "Girando…" : !disponibles ? "Sorteo finalizado" : "Girar"}</button>}
         {!preview && ruleta.juego.retirarGanador && <p className="remaining-prizes">{disponibles} premios disponibles</p>}
       </aside>
     </div>

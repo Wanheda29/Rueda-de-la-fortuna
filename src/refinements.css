@@ -31,15 +31,9 @@
 .import-wheel-button { position: relative; display: inline-flex; align-items: center; justify-content: center; min-height: 40px; border: 1px solid #ffcf3344; border-radius: 8px; padding: 8px 12px; background: #ffcf330b; color: #ffdc68 !important; cursor: pointer; }
 .import-wheel-button input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .import-wheel-button:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
-.winner-card { position: relative; width: min(100%, 320px); min-width: 0; margin: 0; padding: 12px 14px; border: 1px solid #ffffff1c; border-left: 2px solid var(--result-color, #ffcf33); border-radius: 10px; background: #181818c2; color: #fff; box-shadow: 0 3px 12px #0002; text-align: left; box-sizing: border-box; }
-.winner-card h2 { padding-right: 30px; margin: 0; font-size: .78rem; font-weight: 500; line-height: 1.4; color: #e1dfd5; overflow-wrap: anywhere; }
-.winner-card #winner-prize { margin: 4px 0 0; padding-right: 24px; max-width: none; color: #fff; font-size: clamp(1.1rem, 1.8vw, 1.3rem); font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
-.winner-card-actions { display: flex; justify-content: flex-start; margin-top: 10px; }
-.play-side .winner-card .winner-repeat { width: auto; min-height: 32px; padding: 0 10px; border: 1px solid #ffffff40; border-radius: 6px; background: #ffffff0a; box-shadow: none; color: #fff; font-size: .75rem; font-weight: 600; }
-.play-side .winner-card .winner-repeat:hover:not(:disabled) { background: #ffffff20; }
-.play-side .winner-card .winner-close { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 6px; background: transparent; box-shadow: none; color: #e1dfd5; font: inherit; font-size: 1.5rem; line-height: 1; cursor: pointer; }
-.play-side .winner-card .winner-close:hover { background: #ffffff18; color: #fff; }
-.winner-card .winner-help { font-size: .75rem; color: #ddd; margin-top: 10px; line-height: 1.5; }
+.winner-text-result { position: fixed; z-index: 20; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; gap: .3em; width: max-content; max-width: calc(100vw - 40px); margin: 0; padding: 0; color: #fff; font-size: clamp(2.25rem, 7vw, 7rem); line-height: 1.12; text-align: center; pointer-events: none; text-shadow: 0 2px 6px #000d, 0 0 2px #000; }
+.winner-text-result #winner-prize { min-width: 0; font: inherit; font-weight: 900; overflow-wrap: anywhere; }
+.winner-dot { flex: 0 0 auto; width: clamp(12px, .28em, 24px); aspect-ratio: 1; border-radius: 50%; border: 2px solid #fff; background: var(--result-color); box-shadow: 0 1px 5px #0009; }
 .controls-shell { position: relative; min-height: 44px; }
 .presentation-controls { transition: opacity 200ms ease; }
 .presentation-controls.controls-hidden { opacity: 0; pointer-events: none; }
