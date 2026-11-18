@@ -29,14 +29,14 @@ export function SavedLibrary({ wheels, onLoad, onDuplicate, onDelete, onImport }
   </section>;
 }
 
-export function WinnerCard({ result, onClose, onSpin, canSpin, persistent }) {
+export function WinnerCard({ result, onClose, onSpin, canSpin, persistent, showSpin = true }) {
   const ref = useRef(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   function close() {
     const restoreFocus = ref.current?.contains(document.activeElement);
     closeRef.current();
-    if (restoreFocus) requestAnimationFrame(() => document.querySelector(".play-side > .spin-button")?.focus({ preventScroll: true }));
+    if (restoreFocus) requestAnimationFrame(() => (document.querySelector(".play-side > .spin-button:not(:disabled)") || document.querySelector(".play-wheel .wheel-center:not(:disabled)") || document.querySelector(".play-layout .session-actions button:not(:disabled), .play-layout .result-history summary"))?.focus({ preventScroll: true }));
   }
   useEffect(() => {
     const escape = event => { if (event.key === "Escape") close(); };
@@ -54,7 +54,7 @@ export function WinnerCard({ result, onClose, onSpin, canSpin, persistent }) {
     <h2 id="winner-title">{result.mensajeResultado || "Resultado"}</h2>
     <p id="winner-prize">{result.texto || "Gajo sin texto"}</p>
     </div>
-    <div className="winner-card-actions"><button className="spin-button" type="button" disabled={!canSpin} onClick={() => { closeRef.current(); onSpin(); }}>Volver a girar</button><button className="secondary-button" type="button" onClick={close}>Cerrar</button></div>
+    <div className="winner-card-actions">{showSpin && <button className="spin-button" type="button" disabled={!canSpin} onClick={() => { closeRef.current(); onSpin(); }}>Volver a girar</button>}<button className="secondary-button" type="button" onClick={close}>Cerrar</button></div>
     {!canSpin && <p className="winner-help">Se agotaron los premios. Cierra y reinicia la sesión para volver a jugar.</p>}
   </section>;
 }

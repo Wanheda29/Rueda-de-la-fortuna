@@ -162,6 +162,39 @@ test("long labels fit the wheel in both orientations and the custom message surv
   await page.screenshot({ path: "test-results/long-labels.png", fullPage: true });
 });
 
+test("spin button visibility persists and allows keyboard and center spins without instructions", async ({ page }) => {
+  await page.setViewportSize({ width: 1080, height: 1920 });
+  await seed(page, { juego: { sonido: false, animaciones: false, confeti: false, mostrarHistorial: false } });
+  await page.goto(".");
+  await page.getByRole("tab", { name: "Apariencia" }).click();
+  await expect(page.getByLabel("Mostrar botón Girar")).toBeChecked();
+  await page.getByLabel("Mostrar botón Girar").uncheck();
+  await expect(page.locator(".scene-preview .play-side > .spin-button")).toHaveCount(0);
+  await expect(page.getByText("Borrador guardado en este dispositivo", { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole("tab", { name: "Apariencia" }).click();
+  await expect(page.getByLabel("Mostrar botón Girar")).not.toBeChecked();
+  await page.getByRole("button", { name: "Jugar", exact: true }).click();
+  await expect(page.getByText(/Pulsa Espacio para girar/)).toHaveCount(0);
+  await expect(page.locator(".play-side > .spin-button")).toHaveCount(0);
+  await page.locator(".wheel-face").click({ position: { x: 100, y: 200 } });
+  await page.keyboard.press("Space");
+  await expect(page.locator(".winner-card")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Volver a girar", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Girar ruleta", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Girar ruleta", exact: true }).click();
+  await expect(page.locator(".winner-card")).toBeVisible();
+  await page.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await page.screenshot({ path: "test-results/portrait-without-spin-button.png", fullPage: true });
+  await page.getByRole("button", { name: "Volver al editor", exact: true }).click();
+  await page.getByRole("tab", { name: "Apariencia" }).click();
+  await page.getByLabel("Mostrar botón Girar").check();
+  await page.getByRole("button", { name: "Jugar", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Girar", exact: true })).toBeVisible();
+  await expect(page.getByText(/Pulsa Espacio para girar/)).toHaveCount(0);
+});
+
 test("history visibility persists without losing draws or trapping an exhausted session", async ({ page }) => {
   await seed(page, { gajos: [100, 0, 0, 0].map((probabilidad, i) => ({ texto: `Premio ${i + 1}`, probabilidad, color: "#14b8a6" })) });
   await page.goto(".");
