@@ -36,6 +36,8 @@ export function GameSettings({ value, onChange, reducedMotion }) {
     </label>
     {[["sonido", "Reproducir sonidos"], ["confeti", "Celebrar con confeti"], ["animaciones", "Animar la rueda"], ["retirarGanador", "Retirar al ganador después de cada tirada"], ["mantenerResultado", "Mantener el resultado hasta que lo cierre"], ["ocultarControles", "Ocultar controles al dejar de interactuar"]].map(([key, label]) => <label key={key} className="check-field"><input type="checkbox" checked={value[key]} onChange={e => onChange(key, e.target.checked)} />{label}</label>)}
     <SoundLevels value={value} onChange={onChange} />
+    <label className="check-field"><input type="checkbox" checked={value.mostrarBotonGirar} onChange={e => onChange("mostrarBotonGirar", e.target.checked)} />Mostrar botón Girar</label>
+    <p>Si lo ocultas, puedes girar con la tecla Espacio o pulsando el centro de la rueda.</p>
     <label className="check-field"><input type="checkbox" checked={value.mostrarHistorial} onChange={e => onChange("mostrarHistorial", e.target.checked)} />Mostrar historial de tiradas</label>
     <p>Retirar al ganador evita repeticiones durante la sesión; conserva todos los gajos de tu diseño.</p>
     {reducedMotion && <p>Tu dispositivo solicita movimiento reducido. Las animaciones y el confeti permanecerán desactivados.</p>}

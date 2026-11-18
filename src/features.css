@@ -34,7 +34,6 @@ textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent);
 .presentation-controls { align-items: center; gap: 12px; }
 .presentation-controls .ghost-button, .presentation-controls .secondary-button { min-height: 40px; font-size: .82rem; }
 .game-message { max-width: none; padding: 12px 16px; border: 1px solid #ffcf3344; border-radius: 10px; background: #17150f; color: #ffdc68; }
-.game-shortcut { text-align: center; justify-self: center; font-size: .75rem; color: #999; }
 .remaining-prizes { font-size: .8rem; color: #b9b6ac; }
 .result-history { width: min(100%, 640px); justify-self: center; border: 1px solid #ffffff26; border-radius: 14px; padding: 14px 18px; background: #141414e6; }
 .result-history summary { cursor: pointer; min-height: 30px; font-size: .9rem; font-weight: 600; }

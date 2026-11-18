@@ -1446,9 +1446,8 @@ function VistaJuego({
       </PresentationControls>
       {mensajeJuego && <p className="game-message" role="status">{mensajeJuego}</p>}
       <GameScene {...{ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando, ultimoResultado, animarRuleta, girarRuleta, disponibles}}
-        resultCard={mostrarAnuncioGanador && !estaGirando && ultimoResultado ? <WinnerCard result={ultimoResultado} onClose={ocultarAnuncioGanador} onSpin={girarRuleta} canSpin={disponibles > 0} persistent={ruleta.juego.mantenerResultado} /> : null} />
+        resultCard={mostrarAnuncioGanador && !estaGirando && ultimoResultado ? <WinnerCard result={ultimoResultado} onClose={ocultarAnuncioGanador} onSpin={girarRuleta} canSpin={disponibles > 0} persistent={ruleta.juego.mantenerResultado} showSpin={ruleta.juego.mostrarBotonGirar} /> : null} />
       {ruleta.juego.mostrarHistorial ? <ResultHistory results={historial} removedCount={ruleta.juego.retirarGanador ? retirados.length : 0} onReset={reiniciarSesion} /> : (historial.length > 0 || retirados.length > 0) && <div className="session-actions"><button className="ghost-button" type="button" onClick={reiniciarSesion}>Reiniciar sesión</button></div>}
-      <p className="game-shortcut">Pulsa Espacio para girar · Esc para salir de pantalla completa</p>
     </section>
   );
 }
@@ -1466,7 +1465,7 @@ function GameScene({ ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualR
           <span>{preview ? "Ejemplo de resultado" : "Último resultado"}</span>
           {estaGirando ? <strong>Girando…</strong> : ultimoResultado ? <div className="result-value"><span className="result-color" style={{ background: ultimoResultado.color }} aria-hidden="true" /><strong>{ultimoResultado.texto || "Sin texto"}</strong></div> : <strong>Aún no hay resultado</strong>}
         </div>}
-        {resultCard || <button type="button" className="spin-button" disabled={preview || estaGirando || !disponibles} onClick={girarRuleta}>{estaGirando ? "Girando…" : !disponibles ? "Sorteo finalizado" : "Girar"}</button>}
+        {resultCard || (ruleta.juego.mostrarBotonGirar && <button type="button" className="spin-button" disabled={preview || estaGirando || !disponibles} onClick={girarRuleta}>{estaGirando ? "Girando…" : !disponibles ? "Sorteo finalizado" : "Girar"}</button>)}
         {!preview && ruleta.juego.retirarGanador && <p className="remaining-prizes">{disponibles} premios disponibles</p>}
       </aside>
     </div>
@@ -1535,6 +1534,7 @@ function RuletaVisual({
       <button
         className={`wheel-center ${ruleta.centro.imagen ? "has-image" : ""}`}
         type="button"
+        aria-label="Girar ruleta"
         onClick={onCenterClick}
         disabled={!onCenterClick}
       >
