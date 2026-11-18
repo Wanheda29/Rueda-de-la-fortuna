@@ -74,6 +74,10 @@ test("mobile result sits below the wheel without an overlay or focus trap", asyn
   expect(cardBox.y).toBeGreaterThanOrEqual(wheelBox.y + wheelBox.height);
   expect(cardBox.x).toBeGreaterThanOrEqual(0);
   expect(cardBox.x + cardBox.width).toBeLessThanOrEqual(390);
+  expect(cardBox.width).toBeLessThanOrEqual(320);
+  expect(cardBox.height).toBeLessThanOrEqual(130);
+  const repeatBox = await page.getByRole("button", { name: "Volver a girar", exact: true }).boundingBox();
+  expect(repeatBox.width).toBeLessThan(cardBox.width * .6);
   await expect(page.locator("dialog")).toHaveCount(0);
   await page.screenshot({ path: "test-results/winner-card-mobile.png", fullPage: true });
   await page.getByRole("button", { name: "Cerrar", exact: true }).click();
