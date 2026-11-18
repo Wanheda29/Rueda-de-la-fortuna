@@ -110,8 +110,8 @@
     font-size: clamp(.95rem, 1.8vw, 1.5rem);
   }
 
-  .play-shell .play-side > .result-box,
-  .play-shell .play-side > .winner-card { width: min(100%, 540px); }
+  .play-shell .play-side > .result-box { width: min(100%, 540px); }
+  .play-shell .play-side > .winner-card { width: min(100%, 320px); }
 
   .play-shell .play-layout > .result-history,
   .play-shell .play-layout > .session-actions {

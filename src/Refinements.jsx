@@ -53,7 +53,8 @@ export function WinnerCard({ result, onClose, onSpin, canSpin, persistent, showS
     <h2 id="winner-title">{result.mensajeResultado || "Resultado"}</h2>
     <p id="winner-prize">{result.texto || "Gajo sin texto"}</p>
     </div>
-    <div className="winner-card-actions">{showSpin && <button className="spin-button" type="button" disabled={!canSpin} onClick={() => { closeRef.current(); onSpin(); }}>Volver a girar</button>}<button className="secondary-button" type="button" onClick={close}>Cerrar</button></div>
+    <button className="winner-close" type="button" aria-label="Cerrar" title="Cerrar resultado" onClick={close}><span aria-hidden="true">×</span></button>
+    {showSpin && <div className="winner-card-actions"><button className="ghost-button winner-repeat" type="button" disabled={!canSpin} onClick={() => { closeRef.current(); onSpin(); }}>Volver a girar</button></div>}
     {!canSpin && <p className="winner-help">Se agotaron los premios. Cierra y reinicia la sesión para volver a jugar.</p>}
   </section>;
 }

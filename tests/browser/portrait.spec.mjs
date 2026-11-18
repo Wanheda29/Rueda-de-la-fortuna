@@ -46,5 +46,7 @@ test("portrait composition follows the background at different resolutions and a
   const wheel = await page.locator(".play-wheel .wheel-wrap").boundingBox();
   const result = await page.locator(".winner-card").boundingBox();
   expect(result.y).toBeGreaterThan(wheel.y + wheel.height);
+  expect(result.width).toBeLessThanOrEqual(320);
+  expect(result.height).toBeLessThanOrEqual(130);
   await page.screenshot({ path: "test-results/portrait-result.png", fullPage: true });
 });

@@ -62,6 +62,10 @@ Referencias: [Supabase Auth anónimo](https://supabase.com/docs/reference/javasc
 
 ## Validación
 
+### Tarjeta compacta de resultado
+
+La tarjeta tiene un ancho máximo de 320 px, menos márgenes y un fondo oscuro con un 76% de opacidad. El premio conserva el énfasis; «Volver a girar» usa un botón secundario compacto y una × con nombre accesible «Cerrar» reemplaza el botón de cierre. Se mantienen Escape, la recuperación del foco, los mensajes personalizados y la opción de ocultar los botones de giro. Probar con el fondo real de la ruleta, nombres largos y en vertical/horizontal antes de publicar.
+
 ### Presentación vertical
 
 En pantallas verticales de al menos 760 px de alto, la rueda queda centrada al 47,5% de la altura; su diámetro es el menor entre el 72% del ancho y el 40,5% de la altura. «Girar» queda centrado debajo, separado un 4% de la altura. Los controles se sitúan arriba y el fondo conserva el tamaño del viewport aunque el historial o el resultado requieran desplazamiento. Las pantallas verticales más bajas usan una columna fluida.
