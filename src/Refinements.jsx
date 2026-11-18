@@ -50,7 +50,6 @@ export function WinnerCard({ result, onClose, onSpin, canSpin, persistent, showS
   }, [persistent, result.id]);
   return <section ref={ref} className="winner-card" aria-labelledby="winner-title" style={{ "--result-color": result.color }}>
     <div role="status" aria-live="polite" aria-atomic="true">
-    <span className="winner-kicker">Resultado de la tirada</span>
     <h2 id="winner-title">{result.mensajeResultado || "Resultado"}</h2>
     <p id="winner-prize">{result.texto || "Gajo sin texto"}</p>
     </div>
