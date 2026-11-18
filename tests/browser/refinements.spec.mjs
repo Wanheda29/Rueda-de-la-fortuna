@@ -19,14 +19,16 @@ test("proportional wheel, pointer, highlight and effective probabilities agree",
   await expect(page.locator(".wheel-face > g")).toHaveCount(3);
   await page.getByRole("button", { name: "Jugar", exact: true }).click();
   await page.getByRole("button", { name: "Girar", exact: true }).click();
-  const dialog = page.locator(".winner-card");
+  const dialog = page.locator(".winner-text-result");
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("heading")).toHaveText("Vuelve a intentarlo");
+  await expect(dialog).toHaveText("Pierde turno");
+  await expect(dialog.locator(".winner-dot")).toHaveCSS("background-color", "rgb(20, 184, 166)");
+  await expect(dialog.getByRole("button")).toHaveCount(0);
   await expect(dialog.locator("#winner-prize")).toHaveText("Pierde turno");
   const rotation = await page.locator(".wheel").evaluate(el => Number(el.style.transform.match(/rotate\(([-.\d]+)deg\)/)[1]));
   expect(sliceAtPointer(wheelSlices([70, 20, 10, 0].map(probabilidad => ({ probabilidad })), "proporcionales"), rotation)).toBe(1);
   await expect(page.locator(".winning-slice")).toHaveAttribute("data-slice-index", "1");
-  await page.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(page.locator(".play-layout .probability-info")).toHaveCount(0);
   await expect(page.locator(".wheel-face > g > title")).toHaveText(["Gran premio", "Pierde turno", "Otra oportunidad"]);
   await page.screenshot({ path: "test-results/proportional-game.png", fullPage: true });
@@ -38,7 +40,7 @@ test("proportional wheel, pointer, highlight and effective probabilities agree",
   await expect(rows.nth(2).locator("td").last()).toHaveText("12.5%");
 });
 
-test("inline result stays visible, supports repeat and restores keyboard access", async ({ page }) => {
+test("centered result stays visible without blocking repeat or changing focus", async ({ page }) => {
   await page.clock.install();
   await seed(page, { juego: { sonido: false, animaciones: false, confeti: false, mantenerResultado: true } });
   await page.goto(".");
@@ -46,42 +48,63 @@ test("inline result stays visible, supports repeat and restores keyboard access"
   await page.getByRole("button", { name: "Girar", exact: true }).click();
   await page.clock.runFor(200);
   await page.clock.runFor(10000);
-  await expect(page.locator(".winner-card")).toBeVisible();
+  await expect(page.locator(".winner-text-result")).toBeVisible();
   await expect(page.locator("dialog")).toHaveCount(0);
-  await expect(page.locator(".play-side > .winner-card")).toHaveCount(1);
-  const wheelBox = await page.locator(".wheel-wrap").boundingBox();
-  const cardBox = await page.locator(".winner-card").boundingBox();
-  expect(cardBox.x).toBeGreaterThanOrEqual(wheelBox.x + wheelBox.width);
-  expect(cardBox.width).toBeLessThanOrEqual(360);
-  await page.screenshot({ path: "test-results/winner-card.png", fullPage: true });
-  await page.getByRole("button", { name: "Volver a girar", exact: true }).click();
+  await expect(page.locator(".play-layout > .winner-text-result")).toHaveCount(1);
+  const cardBox = await page.locator(".winner-text-result").boundingBox();
+  const viewport = page.viewportSize();
+  expect(cardBox.x + cardBox.width / 2).toBeCloseTo(viewport.width / 2, 0);
+  expect(cardBox.y + cardBox.height / 2).toBeCloseTo(viewport.height / 2, 0);
+  expect(await page.locator(".winner-text-result").evaluate(el => el.contains(document.activeElement))).toBe(false);
+  await page.screenshot({ path: "test-results/centered-result.png", fullPage: true });
+  await page.getByRole("button", { name: "Girar", exact: true }).click();
+  await expect(page.locator(".winner-text-result")).toHaveCount(0);
   await page.clock.runFor(200);
   await expect(page.locator(".result-history summary")).toContainText("2");
   await page.keyboard.press("Escape");
-  await expect(page.locator(".winner-card")).toHaveCount(0);
+  await expect(page.locator(".winner-text-result")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Girar", exact: true })).toBeEnabled();
 });
 
-test("mobile result sits below the wheel without an overlay or focus trap", async ({ page }) => {
+test("mobile result is only centered text and color without a panel or focus trap", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seed(page);
   await page.goto(".");
   await page.getByRole("button", { name: "Jugar", exact: true }).click();
   await page.getByRole("button", { name: "Girar", exact: true }).click();
-  await expect(page.locator(".winner-card")).toBeVisible();
-  const wheelBox = await page.locator(".wheel-wrap").boundingBox();
-  const cardBox = await page.locator(".winner-card").boundingBox();
-  expect(cardBox.y).toBeGreaterThanOrEqual(wheelBox.y + wheelBox.height);
+  await expect(page.locator(".winner-text-result")).toBeVisible();
+  const cardBox = await page.locator(".winner-text-result").boundingBox();
+  expect(cardBox.x + cardBox.width / 2).toBeCloseTo(195, 0);
+  expect(cardBox.y + cardBox.height / 2).toBeCloseTo(422, 0);
   expect(cardBox.x).toBeGreaterThanOrEqual(0);
   expect(cardBox.x + cardBox.width).toBeLessThanOrEqual(390);
-  expect(cardBox.width).toBeLessThanOrEqual(320);
-  expect(cardBox.height).toBeLessThanOrEqual(130);
-  const repeatBox = await page.getByRole("button", { name: "Volver a girar", exact: true }).boundingBox();
-  expect(repeatBox.width).toBeLessThan(cardBox.width * .6);
+  await expect(page.locator(".winner-text-result")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(page.locator(".winner-text-result")).toHaveCSS("pointer-events", "none");
   await expect(page.locator("dialog")).toHaveCount(0);
-  await page.screenshot({ path: "test-results/winner-card-mobile.png", fullPage: true });
-  await page.getByRole("button", { name: "Cerrar", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Girar", exact: true })).toBeFocused();
+  await page.screenshot({ path: "test-results/centered-result-mobile.png", fullPage: true });
+  await page.getByRole("button", { name: "Girar ruleta", exact: true }).click();
+  await expect(page.locator(".result-history summary")).toContainText("2");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Girar", exact: true })).toBeEnabled();
+});
+
+test("long result names wrap within the screen in portrait and landscape", async ({ page }) => {
+  const name = "Una experiencia especial para compartir con toda la familia";
+  await seed(page, { gajos: Array.from({ length: 4 }, () => ({ texto: name, color: "#ffcf33", probabilidad: 25 })), juego: { sonido: false, animaciones: false, confeti: false, mostrarBotonGirar: false } });
+  await page.goto(".");
+  await page.getByRole("button", { name: "Jugar", exact: true }).click();
+  await page.getByRole("button", { name: "Girar ruleta", exact: true }).click();
+  await expect(page.locator(".winner-text-result")).toHaveText(name);
+  for (const [width, height] of [[390, 844], [1080, 1920], [1920, 1080]]) {
+    await page.setViewportSize({ width, height });
+    const box = await page.locator(".winner-text-result").boundingBox();
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(width);
+    expect(box.y + box.height).toBeLessThanOrEqual(height);
+    expect(box.x + box.width / 2).toBeCloseTo(width / 2, 0);
+    expect(box.y + box.height / 2).toBeCloseTo(height / 2, 0);
+  }
 });
 
 test("optional automatic dismissal and idle controls behave without blocking keyboard users", async ({ page }) => {
@@ -100,9 +123,9 @@ test("optional automatic dismissal and idle controls behave without blocking key
   await expect(page.getByRole("slider", { name: /Volumen del resultado/ })).toHaveValue("85");
   await page.getByRole("button", { name: "Girar", exact: true }).click();
   await page.clock.runFor(200);
-  await expect(page.locator(".winner-card")).toBeVisible();
+  await expect(page.locator(".winner-text-result")).toBeVisible();
   await page.clock.runFor(7000);
-  await expect(page.locator(".winner-card")).toHaveCount(0);
+  await expect(page.locator(".winner-text-result")).toHaveCount(0);
 });
 
 test("saved library imports an exported copy, duplicates it, filters and rejects bad JSON", async ({ page }) => {
@@ -183,13 +206,13 @@ test("spin button visibility persists and allows keyboard and center spins witho
   await expect(page.locator(".play-side > .spin-button")).toHaveCount(0);
   await page.locator(".wheel-face").click({ position: { x: 100, y: 200 } });
   await page.keyboard.press("Space");
-  await expect(page.locator(".winner-card")).toBeVisible();
+  await expect(page.locator(".winner-text-result")).toBeVisible();
   await expect(page.getByRole("button", { name: "Volver a girar", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Cerrar", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Girar ruleta", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".winner-text-result")).toHaveCount(0);
   await page.getByRole("button", { name: "Girar ruleta", exact: true }).click();
-  await expect(page.locator(".winner-card")).toBeVisible();
-  await page.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await expect(page.locator(".winner-text-result")).toBeVisible();
+  await page.keyboard.press("Escape");
   await page.screenshot({ path: "test-results/portrait-without-spin-button.png", fullPage: true });
   await page.getByRole("button", { name: "Volver al editor", exact: true }).click();
   await page.getByRole("tab", { name: "Apariencia" }).click();
@@ -211,8 +234,8 @@ test("history visibility persists without losing draws or trapping an exhausted 
   await page.getByRole("button", { name: "Jugar", exact: true }).click();
   await expect(page.locator(".result-history")).toHaveCount(0);
   await page.getByRole("button", { name: "Girar", exact: true }).click();
-  await expect(page.locator(".winner-card")).toBeVisible();
-  await page.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await expect(page.locator(".winner-text-result")).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Sorteo finalizado" })).toBeDisabled();
   await expect(page.locator(".result-history")).toHaveCount(0);
   await page.getByRole("button", { name: "Volver al editor", exact: true }).click();

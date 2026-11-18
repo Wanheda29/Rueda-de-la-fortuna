@@ -42,11 +42,9 @@ test("portrait composition follows the background at different resolutions and a
   expect(landscapeButton.x).toBeGreaterThan(landscapeWheel.x + landscapeWheel.width);
   await page.setViewportSize({ width: 1080, height: 1920 });
   await page.getByRole("button", { name: "Girar", exact: true }).click();
-  await expect(page.locator(".winner-card")).toBeVisible();
-  const wheel = await page.locator(".play-wheel .wheel-wrap").boundingBox();
-  const result = await page.locator(".winner-card").boundingBox();
-  expect(result.y).toBeGreaterThan(wheel.y + wheel.height);
-  expect(result.width).toBeLessThanOrEqual(320);
-  expect(result.height).toBeLessThanOrEqual(130);
+  await expect(page.locator(".winner-text-result")).toBeVisible();
+  const result = await page.locator(".winner-text-result").boundingBox();
+  expect(result.x + result.width / 2).toBeCloseTo(540, 0);
+  expect(result.y + result.height / 2).toBeCloseTo(960, 0);
   await page.screenshot({ path: "test-results/portrait-result.png", fullPage: true });
 });

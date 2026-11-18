@@ -18,12 +18,12 @@ Abrir http://127.0.0.1:5174/Rueda-de-la-fortuna/ . El servidor se limita a esta 
 3. Aplica las paletas o pega entre 4 y 14 premios, uno por línea. Reemplazar la lista o aplicar colores se puede deshacer.
 4. En Apariencia, prueba el ajuste «Mostrar completo» / «Rellenar el círculo» y el encuadre del logo central. La vista previa incluye título, logo de juego y un resultado de ejemplo, claramente identificado.
 5. En Apariencia → Presentación y sorteo, ajusta duración, sonido, confeti y animaciones. La preferencia de movimiento reducido del dispositivo prevalece sobre las animaciones.
-   «Mostrar botón Girar» permite ocultar el botón principal y «Volver a girar» en el resultado. La opción se guarda con la ruleta y se refleja en la vista previa; las ruletas anteriores lo muestran por defecto. Sin esos botones, Espacio o pulsar el centro de la rueda permiten seguir jugando. El texto de instrucciones ya no aparece en el juego.
+   «Mostrar botón Girar» permite ocultar el botón principal. La opción se guarda con la ruleta y se refleja en la vista previa; las ruletas anteriores lo muestran por defecto. Sin ese botón, Espacio o pulsar el centro de la rueda permiten seguir jugando. El texto de instrucciones ya no aparece en el juego.
 6. Activa «Retirar al ganador», entra a Jugar y gira varias veces. El historial registra hasta 100 resultados de la sesión, sin modificar los gajos del diseño. «Reiniciar sesión» limpia el historial y restablece todos los premios. Editar los gajos también inicia una sesión nueva. El historial y los gajos retirados no se conservan al recargar.
 7. Prueba Pantalla completa y Silenciar. Vuelve al editor durante una tirada: no debe aparecer un ganador tardío ni seguir sonando la rueda.
    En Apariencia → Presentación y sorteo puedes desmarcar «Mostrar historial de tiradas». La opción se guarda con la ruleta; oculta el panel del juego sin borrar los resultados de la sesión. Si vuelves a marcarla, reaparecen las tiradas registradas. «Reiniciar sesión» sigue disponible con el historial oculto para restablecer el sorteo.
 8. En Apariencia → Presentación y sorteo, cambia entre texto radial y horizontal. El texto se ajusta al espacio disponible y puede abreviarse con puntos suspensivos. Los sectores muy estrechos omiten el rótulo: su nombre completo sigue en el tooltip y en «Probabilidades actuales».
-9. En Gajos → Más opciones, escribe un «Mensaje al salir» para cada premio. Al terminar una tirada, el gajo elegido se resalta y aparece una tarjeta compacta junto a la rueda (debajo en móvil), sin superposición ni fondo oscurecido/desenfocado. La tarjeta no bloquea los controles ni mueve el foco al aparecer. «Cerrar» o Escape cierran la tarjeta; «Volver a girar» inicia otra tirada. Por defecto permanece hasta que la cierres; puedes optar por cerrarla automáticamente a los 6 segundos.
+9. Al terminar una tirada, el gajo elegido se resalta y aparece únicamente el nombre del premio en grande y un pequeño círculo de su color en el centro de la pantalla. No tiene panel ni botones y deja pasar los clics a la rueda. Escape lo oculta; otro giro lo reemplaza. Por defecto permanece visible; puedes optar por ocultarlo automáticamente a los 6 segundos. Los mensajes personalizados se conservan en la configuración, pero no se muestran en esta presentación de solo nombre.
 10. En móvil, prueba «Ver rueda» / «Ocultar rueda». La vista previa empieza plegada y hay accesos fijos a la vista previa y al juego al pie de la pantalla.
 11. En Guardadas, busca u ordena las versiones por nombre/fecha, duplica una y prueba importar una copia exportada en JSON. La importación crea un ID nuevo y conserva el original; se rechazan archivos inválidos o mayores a 8 MB.
 12. Ajusta por separado los volúmenes del giro y del resultado. Los controles de presentación pueden ocultarse tras 2,5 segundos de inactividad; mover el puntero, tocar o usar el teclado los muestra de nuevo.
@@ -62,15 +62,15 @@ Referencias: [Supabase Auth anónimo](https://supabase.com/docs/reference/javasc
 
 ## Validación
 
-### Tarjeta compacta de resultado
+### Resultado centrado
 
-La tarjeta tiene un ancho máximo de 320 px, menos márgenes y un fondo oscuro con un 76% de opacidad. El premio conserva el énfasis; «Volver a girar» usa un botón secundario compacto y una × con nombre accesible «Cerrar» reemplaza el botón de cierre. Se mantienen Escape, la recuperación del foco, los mensajes personalizados y la opción de ocultar los botones de giro. Probar con el fondo real de la ruleta, nombres largos y en vertical/horizontal antes de publicar.
+El resultado se centra respecto del viewport y muestra solo el nombre con un pequeño círculo de color. Usa texto blanco con sombra para ayudar a leer sobre fondos con imágenes, sin panel ni oscurecimiento. El tamaño se adapta al ancho disponible y los nombres largos saltan de línea. Probar con el fondo real de la ruleta, nombres largos y en vertical/horizontal antes de publicar.
 
 ### Presentación vertical
 
 En pantallas verticales de al menos 760 px de alto, la rueda queda centrada al 47,5% de la altura; su diámetro es el menor entre el 72% del ancho y el 40,5% de la altura. «Girar» queda centrado debajo, separado un 4% de la altura. Los controles se sitúan arriba y el fondo conserva el tamaño del viewport aunque el historial o el resultado requieran desplazamiento. Las pantallas verticales más bajas usan una columna fluida.
 
-Probar en modo juego con la misma ruleta y fondo de las referencias, especialmente en 1080×1920. La prueba `portrait.spec.mjs` comprueba la composición en cinco resoluciones, el cambio a horizontal y la tarjeta de resultado debajo de la rueda.
+Probar en modo juego con la misma ruleta y fondo de las referencias, especialmente en 1080×1920. La prueba `portrait.spec.mjs` comprueba la composición en cinco resoluciones, el cambio a horizontal y el resultado centrado en pantalla.
 
 ```powershell
 npm.cmd test

@@ -29,34 +29,23 @@ export function SavedLibrary({ wheels, onLoad, onDuplicate, onDelete, onImport }
   </section>;
 }
 
-export function WinnerCard({ result, onClose, onSpin, canSpin, persistent, showSpin = true }) {
-  const ref = useRef(null);
+export function WinnerAnnouncement({ result, onClose, persistent }) {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
-  function close() {
-    const restoreFocus = ref.current?.contains(document.activeElement);
-    closeRef.current();
-    if (restoreFocus) requestAnimationFrame(() => (document.querySelector(".play-side > .spin-button:not(:disabled)") || document.querySelector(".play-wheel .wheel-center:not(:disabled)") || document.querySelector(".play-layout .session-actions button:not(:disabled), .play-layout .result-history summary"))?.focus({ preventScroll: true }));
-  }
   useEffect(() => {
-    const escape = event => { if (event.key === "Escape") close(); };
+    const escape = event => { if (event.key === "Escape") closeRef.current(); };
     window.addEventListener("keydown", escape);
     return () => window.removeEventListener("keydown", escape);
   }, []);
   useEffect(() => {
     if (persistent) return;
-    const timer = setTimeout(close, 6000);
+    const timer = setTimeout(() => closeRef.current(), 6000);
     return () => clearTimeout(timer);
   }, [persistent, result.id]);
-  return <section ref={ref} className="winner-card" aria-labelledby="winner-title" style={{ "--result-color": result.color }}>
-    <div role="status" aria-live="polite" aria-atomic="true">
-    <h2 id="winner-title">{result.mensajeResultado || "Resultado"}</h2>
-    <p id="winner-prize">{result.texto || "Gajo sin texto"}</p>
-    </div>
-    <button className="winner-close" type="button" aria-label="Cerrar" title="Cerrar resultado" onClick={close}><span aria-hidden="true">×</span></button>
-    {showSpin && <div className="winner-card-actions"><button className="ghost-button winner-repeat" type="button" disabled={!canSpin} onClick={() => { closeRef.current(); onSpin(); }}>Volver a girar</button></div>}
-    {!canSpin && <p className="winner-help">Se agotaron los premios. Cierra y reinicia la sesión para volver a jugar.</p>}
-  </section>;
+  return <div className="winner-text-result" role="status" aria-live="polite" aria-atomic="true" style={{ "--result-color": result.color }}>
+    <span className="winner-dot" aria-hidden="true" />
+    <strong id="winner-prize">{result.texto || "Gajo sin texto"}</strong>
+  </div>;
 }
 
 export function PresentationControls({ children, autoHide, spinning, resultOpen }) {
