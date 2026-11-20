@@ -126,12 +126,10 @@ test("mobile editor and game stay inside the viewport", async ({ page }) => {
   await page.screenshot({ path: "test-results/game-mobile.png", fullPage: true });
 });
 
-test("reduced motion overrides animation and a stale share link is cleared", async ({ page }) => {
+test("reduced motion overrides animation and confetti", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await seed(page, { juego: { sonido: false, animaciones: true, confeti: true, duracion: 12 } });
-  await page.goto(".?ruleta=old-link");
-  await page.getByRole("button", { name: "Nueva rueda" }).click();
-  await expect(page).not.toHaveURL(/ruleta=/);
+  await page.goto(".");
   await page.getByRole("button", { name: "Jugar", exact: true }).click();
   await page.getByRole("button", { name: "Girar", exact: true }).click();
   await expect(page.locator(".result-history summary")).toContainText("1", { timeout: 1500 });
@@ -171,12 +169,12 @@ async function mockOnline(page, delay = 0, secure = true) {
     body: `
       export const supabaseConfigured = true;
       export const secureEditingEnabled = ${secure};
-      const wheel = { nombre: 'Ruleta compartida', gajos: ['A','B','C','D'].map(texto => ({texto, probabilidad:25, color:'#14b8a6'})) };
+      const wheel = { nombre: 'Ruleta compartida', juego: { sonido:false, animaciones:false, confeti:false }, gajos: ['A','B','C','D'].map(texto => ({texto, probabilidad:25, color:'#14b8a6'})) };
       export const supabase = {
         auth: { getSession: async () => ({data:{session:{user:{id:'current-editor'}}}}) },
         from: () => ({
           select: () => ({eq: () => ({
-            single: () => new Promise(resolve => setTimeout(() => resolve({data:{config_json:wheel},error:null}), ${delay})),
+            single: () => new Promise(resolve => setTimeout(() => resolve({data:{config_json:wheel},error:window.sharedReadFails ? {message:'No disponible'} : null}), ${delay})),
             maybeSingle: async () => ({data:{owner_id:'another-editor'}, error:null})
           })}),
           upsert: async value => { window.lastOnlineSave = value; return {error:null}; }
@@ -186,10 +184,10 @@ async function mockOnline(page, delay = 0, secure = true) {
   }));
 }
 
-test("saving a shared wheel creates an owned copy and never overwrites the original", async ({ page }) => {
+test("saving a locally loaded wheel from another owner creates an owned copy", async ({ page }) => {
+  await seed(page, { id: "original-id" });
   await mockOnline(page);
-  await page.goto(".?ruleta=original-id");
-  await expect(page.locator(".preview-heading h2")).toHaveText("Ruleta compartida");
+  await page.goto(".");
   await page.getByRole("button", { name: "Guardar online", exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.lastOnlineSave?.owner_id)).toBe("current-editor");
   expect(await page.evaluate(() => window.lastOnlineSave.id)).not.toBe("original-id");
@@ -200,22 +198,96 @@ test("saving a shared wheel creates an owned copy and never overwrites the origi
   await expect(page.locator(".share-link-row")).toHaveCount(0);
 });
 
-test("a delayed shared wheel cannot replace a new wheel created while loading", async ({ page }) => {
+test("shared links show loading and then only the game, never the editor", async ({ page }) => {
   await mockOnline(page, 800);
   await page.clock.install();
   await page.goto(".?ruleta=original-id");
-  await page.getByRole("button", { name: "Nueva rueda", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Cargando ruleta compartida...");
+  await expect(page.locator(".creator-layout, .play-layout")).toHaveCount(0);
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  await page.keyboard.press("Space");
   await page.clock.runFor(1200);
-  await expect(page.locator(".preview-heading h2")).toHaveText("Ruleta 1");
-  await expect(page).not.toHaveURL(/ruleta=/);
+  await expect(page.locator(".scene-title")).toHaveText("Ruleta compartida");
+  await expect(page.locator(".shared-player .play-layout")).toBeVisible();
+  await expect(page.locator(".result-history summary")).toContainText("0");
+  await expect(page.getByRole("button", { name: /Volver al editor|Guardar online|Nueva rueda/ })).toHaveCount(0);
+  await expect(page.getByText("Volumen", { exact: true })).toHaveCount(0);
+  for (const [width, height] of [[1080, 1920], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    const controls = await page.locator(".presentation-controls").boundingBox();
+    const wheel = await page.locator(".play-wheel .wheel-wrap").boundingBox();
+    expect(controls.x).toBeGreaterThanOrEqual(0);
+    expect(controls.x + controls.width).toBeLessThanOrEqual(width);
+    expect(controls.y + controls.height).toBeLessThan(wheel.y - 14);
+  }
+  await page.getByRole("button", { name: "Girar", exact: true }).click();
+  await page.clock.runFor(200);
+  await expect(page.locator(".winner-text-result")).toBeVisible();
+  await page.screenshot({ path: "test-results/shared-player.png", fullPage: true });
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".creator-layout")).toHaveCount(0);
+  expect(await page.evaluate(() => window.lastOnlineSave)).toBeUndefined();
+  expect(await page.evaluate(() => localStorage.getItem("ruleta-borrador-v1"))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem("ruletas-editables"))).toBeNull();
 });
 
 test("default online mode remains compatible with the existing schema", async ({ page }) => {
+  await seed(page, { id: "original-id" });
   await mockOnline(page, 0, false);
-  await page.goto(".?ruleta=original-id");
-  await expect(page.locator(".preview-heading h2")).toHaveText("Ruleta compartida");
+  await page.goto(".");
   await page.getByRole("button", { name: "Guardar online", exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.lastOnlineSave?.id)).toBe("original-id");
   expect(await page.evaluate(() => Object.hasOwn(window.lastOnlineSave, "owner_id"))).toBe(false);
+  await expect(page).not.toHaveURL(/ruleta=/);
+  await page.getByRole("tab", { name: "Guardadas", exact: true }).click();
+  await expect(page.locator(".share-link-row input")).toHaveValue(/ruleta=original-id/);
+  await page.reload();
+  await expect(page.locator(".creator-layout")).toBeVisible();
+});
+
+test("shared play preserves the visitor's draft and library, including after reload", async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!localStorage.getItem("ruleta-borrador-v1")) {
+      localStorage.setItem("ruleta-borrador-v1", JSON.stringify({ version: 1, wheel: { nombre: "Mi diseño privado", gajos: ["Uno", "Dos", "Tres", "Cuatro"].map(texto => ({ texto, color: "#14b8a6", probabilidad: 25 })) } }));
+      localStorage.setItem("ruletas-editables", "[]");
+    }
+  });
+  await mockOnline(page, 0, false);
+  await page.goto(".?ruleta=original-id&modo=editor");
+  await expect(page.locator(".scene-title")).toHaveText("Ruleta compartida");
+  const draft = await page.evaluate(() => localStorage.getItem("ruleta-borrador-v1"));
+  await page.getByRole("button", { name: "Activar sonido", exact: true }).click();
   await expect(page).toHaveURL(/ruleta=original-id/);
+  await page.getByRole("button", { name: "Silenciar", exact: true }).click();
+  await page.getByRole("button", { name: "Girar ruleta", exact: true }).click();
+  await expect(page.locator(".winner-text-result")).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".shared-player .scene-title")).toHaveText("Ruleta compartida");
+  await expect(page.locator(".creator-layout")).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem("ruleta-borrador-v1"))).toBe(draft);
+  expect(await page.evaluate(() => localStorage.getItem("ruletas-editables"))).toBe("[]");
+  expect(await page.evaluate(() => window.lastOnlineSave)).toBeUndefined();
+  await page.goto(".");
+  await expect(page.locator(".preview-heading h2")).toHaveText("Mi diseño privado");
+});
+
+test("a failed shared link allows retry without exposing the editor or default wheel", async ({ page }) => {
+  await page.addInitScript(() => { window.sharedReadFails = true; });
+  await mockOnline(page);
+  await page.goto(".?ruleta=missing-id");
+  await expect(page.getByRole("alert")).toContainText("No se pudo cargar la ruleta");
+  await expect(page.locator(".creator-layout, .play-layout")).toHaveCount(0);
+  await page.keyboard.press("Space");
+  await expect(page.locator(".wheel-wrap")).toHaveCount(0);
+  await page.evaluate(() => { window.sharedReadFails = false; });
+  await page.getByRole("button", { name: "Reintentar", exact: true }).click();
+  await expect(page.locator(".shared-player .scene-title")).toHaveText("Ruleta compartida");
+  await expect(page.locator(".creator-layout")).toHaveCount(0);
+});
+
+test("an empty shared id remains an error instead of opening the editor", async ({ page }) => {
+  await page.goto(".?ruleta=");
+  await expect(page.getByRole("alert")).toHaveText("El enlace no contiene una ruleta válida.");
+  await expect(page.locator(".creator-layout, .play-layout")).toHaveCount(0);
 });

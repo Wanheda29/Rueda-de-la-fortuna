@@ -16,6 +16,11 @@
 .preview-content { display: grid; gap: 14px; }
 .preview-toggle, .mobile-editor-actions { display: none; }
 .session-actions { justify-self: center; }
+.shared-player .presentation-controls { justify-content: flex-end; }
+.shared-player .play-header.presentation-controls > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; width: auto; }
+.shared-load { display: grid; place-items: center; text-align: center; }
+.shared-load > div { width: min(100%, 520px); }
+.shared-load p { margin: 0 0 20px; overflow-wrap: anywhere; }
 .session-actions button { min-height: 36px; font-size: .78rem; }
 .library-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .library-filters input { width: 100%; padding: 0 10px; }

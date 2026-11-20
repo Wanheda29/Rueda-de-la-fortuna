@@ -122,11 +122,13 @@ const ruletaInicial = {
 };
 
 function App() {
-  const [vista, setVista] = useState("editor");
-  const draft = useWheelDraft(normalizarRuleta(ruletaInicial), normalizarRuleta);
+  const [idCompartido] = useState(() => new URLSearchParams(window.location.search).get(ONLINE_QUERY_PARAM));
+  const modoCompartido = idCompartido !== null;
+  const [vista, setVista] = useState(modoCompartido ? "juego" : "editor");
+  const draft = useWheelDraft(normalizarRuleta(ruletaInicial), normalizarRuleta, { persist: !modoCompartido });
   const { wheel: ruleta, setWheel: setRuleta, replaceWheel: replaceRuleta } = draft;
   const [ruletasGuardadas, setRuletasGuardadas] = useState(() =>
-    cargarRuletasGuardadas()
+    modoCompartido ? [] : cargarRuletasGuardadas()
   );
   const [rotacion, setRotacion] = useState(0);
   const [estaGirando, setEstaGirando] = useState(false);
@@ -135,8 +137,8 @@ function App() {
   const [confetiId, setConfetiId] = useState(0);
   const [mostrarAnuncioGanador, setMostrarAnuncioGanador] = useState(false);
   const [estadoOnline, setEstadoOnline] = useState({
-    estado: "idle",
-    mensaje: "",
+    estado: modoCompartido ? "loading" : "idle",
+    mensaje: modoCompartido ? "Cargando ruleta compartida..." : "",
   });
   const [enlaceCompartido, setEnlaceCompartido] = useState("");
   const ruletaVisualRef = useRef(null);
@@ -222,16 +224,11 @@ function App() {
   }, [ruleta.gajos]);
 
   useEffect(() => {
-    const parametros = new URLSearchParams(window.location.search);
-    const idRuletaOnline = parametros.get(ONLINE_QUERY_PARAM);
-
-    if (!idRuletaOnline) return;
-
-    cargarRuletaOnline(idRuletaOnline);
+    if (modoCompartido) cargarRuletaOnline(idCompartido);
   }, []);
 
   useEffect(() => {
-    if (vista !== "juego") return;
+    if (vista !== "juego" || (modoCompartido && estadoOnline.estado !== "success")) return;
 
     function manejarTecla(event) {
       const elementoActivo = document.activeElement;
@@ -249,9 +246,10 @@ function App() {
     window.addEventListener("keydown", manejarTecla);
 
     return () => window.removeEventListener("keydown", manejarTecla);
-  }, [vista, estaGirando, ruleta]);
+  }, [vista, estaGirando, ruleta, modoCompartido, estadoOnline.estado]);
 
   useEffect(() => {
+    if (modoCompartido && estadoOnline.estado !== "success") return;
     const debeGirarLento =
       vista === "editor" ||
       (vista === "juego" && !estaGirando && !ultimoResultado);
@@ -282,7 +280,7 @@ function App() {
     frameId = window.requestAnimationFrame(animar);
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [vista, estaGirando, ultimoResultado, animacionesActivas]);
+  }, [vista, estaGirando, ultimoResultado, animacionesActivas, modoCompartido, estadoOnline.estado]);
 
   function actualizarGajo(index, propiedad, valor) {
     setRuleta((ruletaActual) => ({
@@ -366,6 +364,7 @@ function App() {
   }
 
   function actualizarJuego(propiedad, valor) {
+    if (modoCompartido && propiedad !== "sonido") return;
     setRuleta(actual => ({ ...actual, juego: { ...actual.juego, [propiedad]: valor } }));
     if (propiedad === "sonido" && !valor) detenerSonidoGajos();
   }
@@ -531,6 +530,7 @@ function App() {
   }
 
   async function guardarRuletaOnline() {
+    if (modoCompartido) return;
     if (!supabaseConfigured) {
       setEstadoOnline({
         estado: "error",
@@ -595,7 +595,6 @@ function App() {
       replaceRuleta(ruletaGuardada);
       setEnlaceCompartido(enlace);
       guardarRuletaLocal(ruletaGuardada);
-      window.history.replaceState(null, "", enlace);
       setEstadoOnline({
         estado: "success",
         mensaje: guardarComoCopia ? "Se guardó una copia propia. La ruleta compartida conserva su enlace original." : "Ruleta guardada online. El enlace ya está listo.",
@@ -611,6 +610,10 @@ function App() {
 
   async function cargarRuletaOnline(id) {
     const requestId = ++onlineRequestRef.current;
+    if (!id?.trim()) {
+      setEstadoOnline({ estado: "error", mensaje: "El enlace no contiene una ruleta válida." });
+      return;
+    }
     if (!supabaseConfigured) {
       setEstadoOnline({
         estado: "error",
@@ -642,11 +645,10 @@ function App() {
       });
 
       setRuleta(ruletaOnline);
-      guardarRuletaLocal(ruletaOnline);
       setUltimoResultado(null);
       resetearTirada();
       setEnlaceCompartido(crearEnlaceCompartido(id));
-      setVista("editor");
+      setVista("juego");
       setEstadoOnline({
         estado: "success",
         mensaje: "Ruleta compartida cargada correctamente.",
@@ -700,6 +702,7 @@ function App() {
   }
 
   function volverAlEditor() {
+    if (modoCompartido) return;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     resetearTirada();
     setVista("editor");
@@ -722,6 +725,7 @@ function App() {
   }
 
   function girarRuleta() {
+    if (modoCompartido && estadoOnline.estado !== "success") return;
     if (girandoRef.current) return;
     const gajoGanador = choosePrize(gajosDisponibles);
     if (!gajoGanador) { setMensajeJuego("No quedan premios disponibles. Reinicia la sesión para volver a jugar."); return; }
@@ -887,12 +891,21 @@ function App() {
     return audioContextRef.current;
   }
 
+  if (modoCompartido && estadoOnline.estado !== "success") {
+    return <main className="game-shell shared-load" aria-busy={estadoOnline.estado === "loading"}>
+      <div>
+        <p role={estadoOnline.estado === "error" ? "alert" : "status"}>{estadoOnline.mensaje || "Cargando ruleta compartida..."}</p>
+        {estadoOnline.estado === "error" && <button className="secondary-button" type="button" onClick={() => cargarRuletaOnline(idCompartido)}>Reintentar</button>}
+      </div>
+    </main>;
+  }
+
   return (
     <main
-      className={vista === "juego" ? "game-shell play-shell" : "game-shell"}
+      className={`${vista === "juego" ? "game-shell play-shell" : "game-shell"}${modoCompartido ? " shared-player" : ""}`}
       style={vista === "juego" ? fondoModoJuego : undefined}
     >
-      {vista === "editor" ? (
+      {vista === "editor" && !modoCompartido ? (
         <EditorRuleta
           ruleta={ruleta}
           ruletasGuardadas={ruletasGuardadas}
@@ -927,6 +940,7 @@ function App() {
         />
       ) : (
         <VistaJuego
+          modoCompartido={modoCompartido}
           ruleta={ruleta}
           fondoRuleta={fondoRuleta}
           anguloPorGajo={anguloPorGajo}
@@ -1287,8 +1301,8 @@ function EditorRuleta({
             <div>
               <h2>Link compartible</h2>
               <p>
-                Guarda online para abrir esta misma ruleta desde otro
-                dispositivo.
+                Comparte este enlace para jugar directamente, sin acceso al editor.
+                Para editarla después, cárgala desde tu biblioteca de ruletas guardadas.
               </p>
             </div>
 
@@ -1428,6 +1442,7 @@ function EditorGajo({ gajo, index, actualizarGajo, eliminarGajo, puedeEliminar, 
 }
 
 function VistaJuego({
+  modoCompartido = false,
   ruleta, fondoRuleta, anguloPorGajo, rotacion, ruletaVisualRef, estaGirando,
   ultimoResultado, mostrarAnuncioGanador, confetiId, animarRuleta, girarRuleta,
   ocultarAnuncioGanador, volverAlEditor, historial, retirados, disponibles,
@@ -1437,9 +1452,9 @@ function VistaJuego({
     <section className="play-layout">
       {confetiId > 0 && ruleta.juego.confeti ? <Confeti key={confetiId} /> : null}
       <PresentationControls autoHide={ruleta.juego.ocultarControles} spinning={estaGirando} resultOpen={mostrarAnuncioGanador}>
-        <button className="secondary-button" type="button" onClick={volverAlEditor}>Volver al editor</button>
+        {!modoCompartido && <button className="secondary-button" type="button" onClick={volverAlEditor}>Volver al editor</button>}
         <div>
-          <SoundLevels value={ruleta.juego} onChange={actualizarJuego} />
+          {!modoCompartido && <SoundLevels value={ruleta.juego} onChange={actualizarJuego} />}
           <button className="ghost-button" type="button" aria-pressed={!ruleta.juego.sonido} onClick={() => actualizarJuego("sonido", !ruleta.juego.sonido)}>{ruleta.juego.sonido ? "Silenciar" : "Activar sonido"}</button>
           <button className="ghost-button" type="button" onClick={alternarPantallaCompleta}>{pantallaCompleta ? "Salir de pantalla completa" : "Pantalla completa"}</button>
         </div>
