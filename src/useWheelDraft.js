@@ -3,11 +3,11 @@ import { historyReducer } from "./features.mjs";
 
 const DRAFT_KEY = "ruleta-borrador-v1";
 
-export function useWheelDraft(initial, normalize) {
+export function useWheelDraft(initial, normalize, { persist = true } = {}) {
   const [history, dispatch] = useReducer(historyReducer, null, () => {
     let present = initial;
     try {
-      const saved = JSON.parse(localStorage.getItem(DRAFT_KEY));
+      const saved = persist ? JSON.parse(localStorage.getItem(DRAFT_KEY)) : null;
       if (saved?.version === 1 && saved.wheel) present = normalize(saved.wheel);
     } catch { /* A damaged draft must not stop the editor. */ }
     return { past: [], present, future: [] };
@@ -15,6 +15,7 @@ export function useWheelDraft(initial, normalize) {
   const [saveState, setSaveState] = useState("Guardando borrador…");
 
   useEffect(() => {
+    if (!persist) return;
     setSaveState("Guardando borrador…");
     function save() {
       try {
@@ -29,7 +30,7 @@ export function useWheelDraft(initial, normalize) {
     window.addEventListener("pagehide", save);
     document.addEventListener("visibilitychange", onVisibility);
     return () => { clearTimeout(timer); window.removeEventListener("pagehide", save); document.removeEventListener("visibilitychange", onVisibility); };
-  }, [history.present]);
+  }, [history.present, persist]);
 
   return {
     wheel: history.present,

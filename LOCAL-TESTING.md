@@ -41,6 +41,14 @@ El borrador se guarda en el navegador, bajo `ruleta-borrador-v1`; las ruletas no
 
 ## Guardado online: preparado, sin conexión activa
 
+### Enlaces compartidos: solo juego
+
+Todos los enlaces con `?ruleta=ID`, incluidos los anteriores, abren directamente el modo de juego. No se monta el editor, no existe «Volver al editor» y no se ofrecen ajustes de presentación; solo los controles de juego, sonido y pantalla completa. Durante la carga o ante un error no se muestra ni el editor ni una rueda de ejemplo; el error permite reintentar.
+
+La ruleta compartida se mantiene en memoria durante esa sesión. No se guarda en la biblioteca ni en el borrador del visitante; silenciar tampoco modifica sus datos locales ni la ruleta online. El guardado online del propietario conserva la dirección del editor: únicamente el enlace copiable incluye `?ruleta=ID`. Para editar después, abrir la dirección principal y cargar la ruleta desde Guardadas en el navegador del propietario.
+
+Las pruebas online simuladas cubren carga, juego, recarga, errores y reintentos, ausencia de accesos al editor y conservación de los datos del visitante. Este cambio restringe la navegación de la aplicación; no sustituye la autorización de escritura en Supabase. No se han verificado ni cambiado las políticas de la base activa. La protección por propietario descrita más abajo requiere su propia migración y validación.
+
 No hay credenciales en esta carpeta; por eso Guardar online permanece deshabilitado. El uso local, los sonidos, las imágenes del dispositivo, el borrador y las versiones locales funcionan sin Supabase.
 
 El guardado online mantiene por defecto el funcionamiento y esquema anteriores, para que la publicación de estas mejoras no requiera modificar la base activa. La protección por propietario **no está activa** en ese modo: las políticas anteriores siguen siendo las que rigen el acceso.
