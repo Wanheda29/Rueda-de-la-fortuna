@@ -70,6 +70,18 @@ Referencias: [Supabase Auth anónimo](https://supabase.com/docs/reference/javasc
 
 ## Validación
 
+### Consulta de disponibilidad de Supabase cada tres días
+
+El workflow `Supabase availability check` realiza una única lectura `GET /rest/v1/wheels?select=id&limit=1`. No inserta ni actualiza datos y no imprime IDs ni claves. Reutiliza las variables del repositorio `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`; solo admite una clave pública publishable o anon, nunca service_role.
+
+El calendario parte del 27/11/2026: 30/11, 03/12, 06/12, etc., a las 12:17 UTC (09:17 en Uruguay). GitHub dispara la tarea diariamente, pero el script solo consulta Supabase cada tercer día; en los días intermedios sale sin contactar el proyecto. Así el cambio de mes no introduce intervalos de uno o dos días. Al instalar o modificar esta tarea en main se hace una consulta inicial de verificación; «Run workflow» permite verificar manualmente en Actions.
+
+La ejecución falla visiblemente si la conexión o la consulta falla; las notificaciones dependen de las preferencias de GitHub del usuario. Si el proyecto ya está pausado, hay que reanudarlo desde Supabase. Las consultas no lo reanudan por sí solas. GitHub puede retrasar las tareas y desactivarlas después de 60 días sin actividad en este repositorio público. La frecuencia de tres días es experimental: Supabase no garantiza que evite la pausa del plan gratuito. Desactivar el workflow en Actions revierte la programación sin tocar la aplicación.
+
+Pruebas sin acceso a Supabase: `python -m unittest tests/test_supabase_keepalive.py`. Cubren el intervalo entre meses y años, ausencia de peticiones en días intermedios, consulta solo de lectura, rechazo de claves privadas y manejo de errores sin registrar claves.
+
+Referencias: [pausas de Supabase](https://supabase.com/docs/guides/platform/free-project-pausing), [programación de workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax), [desactivación por inactividad](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows).
+
 ### Resultado centrado
 
 El resultado se centra respecto del viewport y muestra solo el nombre con un pequeño círculo de color. Usa texto blanco con sombra para ayudar a leer sobre fondos con imágenes, sin panel ni oscurecimiento. El tamaño se adapta al ancho disponible y los nombres largos saltan de línea. Probar con el fondo real de la ruleta, nombres largos y en vertical/horizontal antes de publicar.
