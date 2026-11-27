@@ -1,0 +1,36 @@
+name: Supabase availability check
+
+on:
+  # Daily trigger; the script contacts Supabase only every third UTC day.
+  # This avoids the short intervals caused by monthly cron day resets.
+  schedule:
+    - cron: '17 12 * * *'
+  workflow_dispatch:
+  # Verify once when this check is installed or changed on main.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/supabase-keepalive.yml'
+      - 'scripts/supabase_keepalive.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-availability
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify scheduling and read-only behavior
+        run: python3 -m unittest discover -s tests -p test_supabase_keepalive.py
+      - name: Check Supabase when due
+        run: python3 scripts/supabase_keepalive.py
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          SUPABASE_PUBLIC_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
